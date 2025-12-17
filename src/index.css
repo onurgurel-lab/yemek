@@ -1,0 +1,413 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* Kurumsal Renk Değişkenleri */
+:root {
+    --corporate-primary: #1e3a8a;
+    --corporate-primary-light: #2563eb;
+    --corporate-primary-dark: #1e40af;
+    --corporate-secondary: #06b6d4;
+    --corporate-accent: #0891b2;
+    --corporate-gray-50: #f8fafc;
+    --corporate-gray-100: #f1f5f9;
+    --corporate-gray-200: #e2e8f0;
+    --corporate-gray-300: #cbd5e1;
+    --corporate-gray-400: #94a3b8;
+    --corporate-gray-500: #64748b;
+    --corporate-gray-600: #475569;
+    --corporate-gray-700: #334155;
+    --corporate-gray-800: #1e293b;
+    --corporate-gray-900: #0f172a;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--corporate-gray-50);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Kurumsal Tipografi */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--corporate-gray-900);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+/* Custom Scrollbar - Kurumsal Tasarım */
+::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--corporate-gray-100);
+    border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--corporate-secondary);
+    border-radius: 6px;
+    border: 2px solid var(--corporate-gray-100);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--corporate-accent);
+}
+
+/* Ant Design Layout - Kurumsal Tema */
+.ant-layout {
+    min-height: 100vh;
+    background: var(--corporate-gray-50);
+}
+
+.ant-layout-header {
+    display: flex;
+    align-items: center;
+    background: var(--corporate-gray-800);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+    border-bottom: 2px solid var(--corporate-secondary);
+}
+
+/* Button Özelleştirmeleri - Kurumsal Renkler */
+.ant-btn-primary {
+    background: var(--corporate-primary-light);
+    border: none;
+    box-shadow: 0 4px 12px rgba(30, 58, 138, 0.25);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-weight: 500;
+    border-radius: 8px;
+}
+
+.ant-btn-primary:hover,
+.ant-btn-primary:focus {
+    background: var(--corporate-secondary);
+    box-shadow: 0 6px 20px rgba(6, 182, 212, 0.35);
+    transform: translateY(-2px);
+}
+
+.ant-btn-default {
+    border-color: var(--corporate-gray-300);
+    color: var(--corporate-gray-700);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.ant-btn-default:hover,
+.ant-btn-default:focus {
+    border-color: var(--corporate-secondary);
+    color: var(--corporate-secondary);
+}
+
+/* Card Özelleştirmeleri */
+.ant-card {
+    border-radius: 16px;
+    border: 1px solid var(--corporate-gray-200);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.ant-card:hover {
+    box-shadow: 0 12px 28px rgba(30, 58, 138, 0.12), 0 4px 12px rgba(6, 182, 212, 0.08);
+    transform: translateY(-2px);
+    border-color: var(--corporate-secondary);
+}
+
+.ant-card-head {
+    background: var(--corporate-gray-50);
+    border-bottom: 2px solid var(--corporate-secondary);
+    color: var(--corporate-gray-900);
+    font-weight: 600;
+}
+
+/* Table Özelleştirmeleri */
+.ant-table {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.ant-table-thead > tr > th {
+    background: var(--corporate-gray-800);
+    color: white;
+    font-weight: 600;
+    border-bottom: 2px solid var(--corporate-secondary);
+    padding: 16px;
+}
+
+.ant-table-tbody > tr {
+    transition: all 0.3s ease;
+}
+
+.ant-table-tbody > tr:hover > td {
+    background: var(--corporate-gray-50);
+}
+
+.ant-table-tbody > tr > td {
+    color: var(--corporate-gray-700);
+    border-bottom: 1px solid var(--corporate-gray-200);
+}
+
+/* Form Özelleştirmeleri */
+.ant-form-item-label > label {
+    color: var(--corporate-gray-700);
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.ant-input,
+.ant-input-password,
+.ant-select-selector,
+.ant-picker {
+    border-radius: 10px;
+    border: 2px solid var(--corporate-gray-300);
+    transition: all 0.3s ease;
+    padding: 10px 14px;
+}
+
+.ant-input:hover,
+.ant-input-password:hover,
+.ant-select-selector:hover,
+.ant-picker:hover {
+    border-color: var(--corporate-secondary);
+}
+
+.ant-input:focus,
+.ant-input-password:focus,
+.ant-select-focused .ant-select-selector,
+.ant-picker-focused {
+    border-color: var(--corporate-primary-light);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+
+/* Modal Özelleştirmeleri */
+.ant-modal {
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.ant-modal-header {
+}
+
+.ant-modal-title {
+    color: white;
+    font-weight: 600;
+    font-size: 18px;
+}
+
+.ant-modal-content {
+    border-radius: 16px;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+}
+
+.ant-modal-footer {
+    border-top: 1px solid var(--corporate-gray-200);
+    padding: 16px 24px;
+}
+
+/* Notification Özelleştirmeleri */
+.ant-notification-notice {
+    border-radius: 12px;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.15);
+    border-left: 4px solid var(--corporate-secondary);
+}
+
+.ant-notification-notice-success {
+    border-left-color: #10b981;
+}
+
+.ant-notification-notice-error {
+    border-left-color: #ef4444;
+}
+
+.ant-notification-notice-warning {
+    border-left-color: #f59e0b;
+}
+
+/* Drawer Özelleştirmeleri */
+.ant-drawer-header {
+    background: var(--corporate-gray-50);
+    border-bottom: 2px solid var(--corporate-secondary);
+    padding: 20px 24px;
+}
+
+.ant-drawer-title {
+    color: var(--corporate-gray-900);
+    font-weight: 600;
+}
+
+.ant-drawer-body {
+    background: white;
+}
+
+/* Avatar Özelleştirmeleri */
+.ant-avatar {
+    border: 2px solid var(--corporate-secondary);
+    box-shadow: 0 4px 12px rgba(6, 182, 212, 0.15);
+}
+
+/* Badge Özelleştirmeleri */
+.ant-badge-status-processing {
+    background: var(--corporate-secondary);
+}
+
+.ant-badge-status-success {
+    background: #10b981;
+}
+
+/* Tag Özelleştirmeleri */
+.ant-tag {
+    border-radius: 6px;
+    border: none;
+    font-weight: 500;
+    padding: 4px 12px;
+}
+
+.ant-tag-blue {
+    background: var(--corporate-primary-light);
+    color: white;
+}
+
+.ant-tag-cyan {
+    background: var(--corporate-secondary);
+    color: white;
+}
+
+/* Progress Özelleştirmeleri */
+.ant-progress-bg {
+    background: var(--corporate-secondary);
+}
+
+/* Animasyonlar */
+@keyframes slideInFromLeft {
+    from {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideInFromRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        transform: scale(0.95);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.animate-slideIn {
+    animation: slideInFromLeft 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-fadeIn {
+    animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-scaleIn {
+    animation: scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Loading State */
+.ant-spin-dot-item {
+    background-color: var(--corporate-secondary);
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .ant-layout-header {
+        padding: 0 16px;
+        height: 64px;
+    }
+
+    .ant-card {
+        border-radius: 12px;
+    }
+
+    .ant-modal {
+        margin: 16px;
+        max-width: calc(100% - 32px);
+    }
+
+    .ant-table {
+        font-size: 13px;
+    }
+
+    h1 {
+        font-size: 24px;
+    }
+
+    h2 {
+        font-size: 20px;
+    }
+
+    h3 {
+        font-size: 18px;
+    }
+}
+
+@media (max-width: 480px) {
+    .ant-card-head {
+        padding: 12px 16px;
+        font-size: 16px;
+    }
+
+    .ant-card-body {
+        padding: 16px;
+    }
+
+    .ant-btn {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+}
+
+/* Seçili menü öğesi */
+.ant-menu .ant-menu-submenu-selected,
+.ant-menu .ant-menu-item-selected {
+    background: var(--corporate-secondary) !important;
+    color: #fff;
+}
+
+/* Hover durumu */
+.ant-menu .ant-menu-item:hover,
+.ant-menu .ant-menu-submenu-title:hover {
+    color: #fff;
+}
+
+/* Optional: submenu ok işaretlerini de beyaz yap */
+.ant-menu-submenu-selected .ant-menu-submenu-arrow,
+.ant-menu-submenu-title:hover .ant-menu-submenu-arrow {
+    color: #fff;
+    background: var(--corporate-secondary) !important;
+}
+
