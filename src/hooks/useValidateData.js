@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react'
-import { authService } from '@/services/auth'
+import { useState, useEffect } from 'react';
+import { authService } from '@/services/authService';
 
 /**
- * useValidateData - Validate data'sını kullanmak için custom hook
+ * useValidateData Hook
  *
- * localStorage'dan userValidateData'yı okur ve state'e atar.
  * Component'larda kullanıcının projects, roles ve diğer detaylı bilgilerine
  * erişmek için kullanılır.
  *
@@ -17,20 +16,20 @@ import { authService } from '@/services/auth'
  * @property {Function} refresh - Validate data'yı yenile
  */
 export const useValidateData = () => {
-    const [validateData, setValidateData] = useState(null)
+    const [validateData, setValidateData] = useState(null);
 
     /**
      * loadValidateData - localStorage'dan validate data'yı yükle
      */
     const loadValidateData = () => {
-        const data = authService.getValidateData()
-        setValidateData(data)
-    }
+        const data = authService.getValidateData();
+        setValidateData(data);
+    };
 
     // Component mount olduğunda yükle
     useEffect(() => {
-        loadValidateData()
-    }, [])
+        loadValidateData();
+    }, []);
 
     /**
      * hasProject - Kullanıcının belirli bir projesi var mı kontrol et
@@ -39,11 +38,11 @@ export const useValidateData = () => {
      * @returns {boolean}
      */
     const hasProject = (projectName) => {
-        if (!validateData?.projects) return false
+        if (!validateData?.projects) return false;
         return validateData.projects.some(
             project => project.projectName === projectName
-        )
-    }
+        );
+    };
 
     /**
      * hasRole - Kullanıcının belirli bir projede belirli bir rolü var mı
@@ -53,16 +52,16 @@ export const useValidateData = () => {
      * @returns {boolean}
      */
     const hasRole = (projectName, roleName) => {
-        if (!validateData?.projects) return false
+        if (!validateData?.projects) return false;
 
         const project = validateData.projects.find(
             p => p.projectName === projectName
-        )
+        );
 
-        if (!project) return false
+        if (!project) return false;
 
-        return project.roles.includes(roleName)
-    }
+        return project.roles.includes(roleName);
+    };
 
     /**
      * getProjectRoles - Belirli bir projedeki tüm rolleri al
@@ -71,14 +70,14 @@ export const useValidateData = () => {
      * @returns {Array<string>} Roller dizisi
      */
     const getProjectRoles = (projectName) => {
-        if (!validateData?.projects) return []
+        if (!validateData?.projects) return [];
 
         const project = validateData.projects.find(
             p => p.projectName === projectName
-        )
+        );
 
-        return project?.roles || []
-    }
+        return project?.roles || [];
+    };
 
     /**
      * getAllProjects - Tüm projeleri al
@@ -86,15 +85,15 @@ export const useValidateData = () => {
      * @returns {Array<Object>} Projeler dizisi
      */
     const getAllProjects = () => {
-        return validateData?.projects || []
-    }
+        return validateData?.projects || [];
+    };
 
     /**
      * refresh - Validate data'yı localStorage'dan tekrar yükle
      */
     const refresh = () => {
-        loadValidateData()
-    }
+        loadValidateData();
+    };
 
     return {
         validateData,
@@ -104,88 +103,34 @@ export const useValidateData = () => {
         getProjectRoles,
         getAllProjects,
         refresh,
-    }
-}
+    };
+};
 
 /**
  * Kullanım Örnekleri:
  *
- * 1. Temel Kullanım:
- * ```javascript
- * const { validateData, projects } = useValidateData()
- *
- * if (validateData) {
- *   console.log('User:', validateData.fullName)
- *   console.log('Projects:', projects)
+ * 1. Proje kontrolü:
+ * ```jsx
+ * const { hasProject } = useValidateData();
+ * if (hasProject('Yemekhane')) {
+ *   // Yemekhane projesine erişim var
  * }
  * ```
  *
- * 2. Proje Kontrolü:
- * ```javascript
- * const { hasProject } = useValidateData()
- *
- * if (hasProject('Appointment')) {
- *   // Appointment projesine erişimi var
+ * 2. Rol kontrolü:
+ * ```jsx
+ * const { hasRole } = useValidateData();
+ * if (hasRole('Yemekhane', 'YemekhaneAdmin')) {
+ *   // Admin özelliklerini göster
  * }
  * ```
  *
- * 3. Rol Kontrolü:
- * ```javascript
- * const { hasRole } = useValidateData()
- *
- * if (hasRole('Appointment', 'Admin')) {
- *   // Appointment projesinde Admin rolü var
- *   return <AdminPanel />
- * }
- * ```
- *
- * 4. Proje Rollerini Listele:
- * ```javascript
- * const { getProjectRoles } = useValidateData()
- *
- * const roles = getProjectRoles('Appointment')
- * console.log('Roles:', roles) // ["Doctor", "Admin", ...]
- * ```
- *
- * 5. Tüm Projeleri Listele:
- * ```javascript
- * const { getAllProjects } = useValidateData()
- *
- * const projects = getAllProjects()
- * return (
- *   <ul>
- *     {projects.map(project => (
- *       <li key={project.projectName}>
- *         {project.projectName} - {project.roles.join(', ')}
- *       </li>
- *     ))}
- *   </ul>
- * )
- * ```
- *
- * 6. Koşullu Rendering:
- * ```javascript
- * const Dashboard = () => {
- *   const { hasProject, hasRole } = useValidateData()
- *
- *   return (
- *     <div>
- *       {hasProject('Ticket') && <TicketWidget />}
- *       {hasProject('Appointment') && <AppointmentWidget />}
- *       {hasRole('Appointment', 'Admin') && <AdminSettings />}
- *     </div>
- *   )
- * }
- * ```
- *
- * 7. Data Yenileme:
- * ```javascript
- * const { validateData, refresh } = useValidateData()
- *
- * const handleRefresh = () => {
- *   refresh() // localStorage'dan tekrar yükle
- * }
+ * 3. Proje rollerini alma:
+ * ```jsx
+ * const { getProjectRoles } = useValidateData();
+ * const roles = getProjectRoles('Yemekhane');
+ * console.log(roles); // ['User', 'YemekhaneAdmin']
  * ```
  */
 
-export default useValidateData
+export default useValidateData;

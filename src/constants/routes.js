@@ -1,8 +1,16 @@
-import { Navigate } from 'react-router-dom'
-import MainLayout from '../layouts/MainLayout'
-import Login from '../pages/Login'
-import Dashboard from '../pages/Dashboard'
-import Example from '../pages/Example'
+import React from 'react';
+import { Navigate } from 'react-router-dom';
+import MainLayout from '@/layouts/MainLayout';
+import Login from '@/pages/Login';
+import Dashboard from '@/pages/Dashboard';
+import Example from '@/pages/Example';
+
+// Yemekhane sayfaları - Lazy loading
+const MenuView = React.lazy(() => import('@/pages/Yemekhane/MenuView'));
+const MenuManagement = React.lazy(() => import('@/pages/Yemekhane/MenuManagement'));
+const ExcelUpload = React.lazy(() => import('@/pages/Yemekhane/ExcelUpload'));
+const Reports = React.lazy(() => import('@/pages/Yemekhane/Reports'));
+
 /**
  * ROUTE PATHS - URL Yolları
  *
@@ -19,7 +27,12 @@ export const ROUTES = {
     LOGIN: '/login',
     EXAMPLE: '/example',
     TRANSFER: '/transfer',
-}
+    // Yemekhane Routes
+    YEMEKHANE: '/yemekhane',
+    YEMEKHANE_MANAGEMENT: '/yemekhane/yonetim',
+    YEMEKHANE_EXCEL: '/yemekhane/excel-yukle',
+    YEMEKHANE_REPORTS: '/yemekhane/raporlar',
+};
 
 /**
  * ROUTE CONFIGURATIONS - Route Tanımları ve Elementleri
@@ -32,16 +45,7 @@ export const ROUTES = {
  * - private: Giriş yapmış kullanıcılara özel (token gerektirir)
  * - auth: Sadece giriş yapmamış kullanıcılara açık (login, register vb.)
  *
- * Yapı:
- * {
- *   path: string,              // URL yolu
- *   element: Component,        // Render edilecek component
- *   type: 'public'|'private'|'auth',  // Route tipi
- *   requiresAuth: boolean,     // Auth gerekliliği (opsiyonel)
- *   children: Array,           // Alt route'lar (opsiyonel)
- *   index: boolean,            // Index route mu? (opsiyonel)
- *   redirect: string           // Yönlendirme hedefi (opsiyonel)
- * }
+ * NOT: Lazy loaded component'ler için Suspense wrapper'ı App.jsx'te uygulanır
  */
 export const ROUTE_CONFIG = [
     // ==========================================
@@ -50,7 +54,7 @@ export const ROUTE_CONFIG = [
     {
         path: ROUTES.LOGIN,
         element: Login,
-        type: 'auth', // Giriş yapmışsa HOME'a yönlendir
+        type: 'auth',
         requiresAuth: false,
     },
 
@@ -82,35 +86,56 @@ export const ROUTE_CONFIG = [
                 type: 'private',
                 requiresAuth: true,
             },
+            // ==========================================
+            // YEMEKHANE ROUTES - Lazy loaded
+            // ==========================================
+            {
+                path: ROUTES.YEMEKHANE,
+                element: MenuView,
+                type: 'private',
+                requiresAuth: true,
+                lazy: true,
+            },
+            {
+                path: ROUTES.YEMEKHANE_MANAGEMENT,
+                element: MenuManagement,
+                type: 'private',
+                requiresAuth: true,
+                lazy: true,
+            },
+            {
+                path: ROUTES.YEMEKHANE_EXCEL,
+                element: ExcelUpload,
+                type: 'private',
+                requiresAuth: true,
+                lazy: true,
+            },
+            {
+                path: ROUTES.YEMEKHANE_REPORTS,
+                element: Reports,
+                type: 'private',
+                requiresAuth: true,
+                lazy: true,
+            },
         ],
     },
-]
+];
 
 /**
  * PUBLIC_ROUTES - Herkese açık sayfalar
- *
- * Kimlik doğrulama gerektirmeyen route listesi.
- * Auth kontrolünden muaf tutulan sayfalar.
- *
- * Kullanım: Middleware'lerde veya route guard'larda kontrol için
  */
-export const PUBLIC_ROUTES = [
-    ROUTES.LOGIN,
-]
+export const PUBLIC_ROUTES = [ROUTES.LOGIN];
 
 /**
- * PRIVATE_ROUTES - Korumalı sayfalar
- *
- * Sadece giriş yapmış kullanıcıların erişebileceği route listesi.
- * Yetkisiz erişimde LOGIN sayfasına yönlendirilir.
- *
- * Kullanım: Middleware'lerde veya route guard'larda kontrol için
+ * PRIVATE_ROUTES - Giriş gerektiren sayfalar
  */
 export const PRIVATE_ROUTES = [
     ROUTES.DASHBOARD,
     ROUTES.EXAMPLE,
-    ROUTES.PATIENT,
-    '/patient/:id',
-    ROUTES.TRANSFER,
-    '/transfer/:id',
-]
+    ROUTES.YEMEKHANE,
+    ROUTES.YEMEKHANE_MANAGEMENT,
+    ROUTES.YEMEKHANE_EXCEL,
+    ROUTES.YEMEKHANE_REPORTS,
+];
+
+export default ROUTES;

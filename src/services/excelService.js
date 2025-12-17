@@ -85,6 +85,38 @@ export const importFromExcel = async (file, onProgress) => {
     return response.data;
 };
 
+// ==================== DIŞA AKTARMA ====================
+
+/**
+ * Menüleri Excel formatında dışa aktarır
+ */
+export const exportToExcel = async (filters = {}) => {
+    try {
+        const response = await axiosInstance.get(EXCEL.EXPORT, {
+            params: filters,
+            responseType: 'blob',
+        });
+
+        // Blob'u indirilebilir dosyaya çevir
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+
+        // Dosya adını tarihle oluştur
+        const date = new Date().toISOString().split('T')[0];
+        link.setAttribute('download', `menu_export_${date}.xlsx`);
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+
+        return { success: true };
+    } catch (error) {
+        throw new Error('Dışa aktarma başarısız. Lütfen tekrar deneyin.');
+    }
+};
+
 // ==================== ŞABLON İŞLEMLERİ ====================
 
 /**
@@ -186,104 +218,13 @@ export const downloadTemplate = async () => {
     }
 };
 
-// ==================== DIŞA AKTARMA ====================
-
-/**
- * Menüleri Excel'e aktarır
- */
-export const exportToExcel = async (startDate, endDate, filename) => {
-    const response = await axiosInstance.get(EXCEL.EXPORT, {
-        params: { startDate, endDate },
-        responseType: 'blob',
-    });
-
-    const defaultFilename = `menu_${startDate}_${endDate}.xlsx`;
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', filename || defaultFilename);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-
-    return { success: true };
-};
-
-// ==================== SONUÇ FORMATLAMA ====================
-
-/**
- * İçe aktarma sonucunu formatlar
- */
-export const formatImportResult = (result) => {
-    if (!result) {
-        return {
-            success: false,
-            message: 'Sonuç alınamadı.',
-            details: null,
-        };
-    }
-
-    const { successCount = 0, errorCount = 0, errors = [], totalCount = 0 } = result;
-
-    let message = '';
-    if (errorCount === 0) {
-        message = `${successCount} yemek başarıyla eklendi.`;
-    } else if (successCount === 0) {
-        message = `İçe aktarma başarısız. ${errorCount} hata oluştu.`;
-    } else {
-        message = `${successCount} yemek eklendi, ${errorCount} hata oluştu.`;
-    }
-
-    return {
-        success: errorCount === 0,
-        partial: successCount > 0 && errorCount > 0,
-        message,
-        details: {
-            total: totalCount || successCount + errorCount,
-            success: successCount,
-            error: errorCount,
-            errors: errors.slice(0, 10), // İlk 10 hatayı göster
-            hasMoreErrors: errors.length > 10,
-        },
-    };
-};
-
-/**
- * Hata mesajlarını Türkçeleştirir
- */
-export const translateErrorMessage = (error) => {
-    const translations = {
-        'Invalid date format': 'Geçersiz tarih formatı',
-        'Invalid meal time': 'Geçersiz öğün değeri',
-        'Invalid category': 'Geçersiz kategori',
-        'Food name is required': 'Yemek adı zorunludur',
-        'Date is required': 'Tarih zorunludur',
-        'Row is empty': 'Satır boş',
-        'Duplicate entry': 'Mükerrer kayıt',
-    };
-
-    for (const [key, value] of Object.entries(translations)) {
-        if (error.includes(key)) {
-            return error.replace(key, value);
-        }
-    }
-
-    return error;
-};
-
 export default {
-    VALID_EXTENSIONS,
-    MAX_FILE_SIZE_MB,
-    MAX_FILE_SIZE_BYTES,
+    importFromExcel,
+    exportToExcel,
+    downloadTemplate,
+    validateFile,
     validateFileExtension,
     validateFileSize,
-    validateFile,
-    importFromExcel,
     getTemplateInfo,
     generateSampleData,
-    downloadTemplate,
-    exportToExcel,
-    formatImportResult,
-    translateErrorMessage,
 };

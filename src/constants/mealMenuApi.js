@@ -192,42 +192,5 @@ export const isToday = (date) => {
  */
 export const getDefaultMealTab = () => {
     const hour = new Date().getHours();
-    return hour < 15 ? 'lunch' : 'dinner';
-};
-
-/**
- * Puan açıklamasını döndürür
- */
-export const getRatingDescription = (rating) => {
-    return RATING_DESCRIPTIONS[rating] || '';
-};
-
-/**
- * Ay ve yıl stringi döndürür
- */
-export const getMonthYearString = (date) => {
-    const d = new Date(date);
-    return `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
-};
-
-/**
- * Kategorileri sıralar
- */
-export const sortByCategory = (items) => {
-    return [...items].sort((a, b) => {
-        const indexA = CATEGORY_ORDER.indexOf(a.category);
-        const indexB = CATEGORY_ORDER.indexOf(b.category);
-        const orderA = indexA === -1 ? CATEGORY_ORDER.length : indexA;
-        const orderB = indexB === -1 ? CATEGORY_ORDER.length : indexB;
-        return orderA - orderB;
-    });
-};
-
-/**
- * Öğüne göre filtreler
- */
-export const filterByMealTime = (items, mealTime) => {
-    if (!mealTime) return items;
-    const mealTimeValue = mealTime === 'lunch' ? MEAL_TIMES.LUNCH : MEAL_TIMES.DINNER;
-    return items.filter((item) => item.mealTime === mealTimeValue);
+    return hour < 15 ? MEAL_TIMES.LUNCH : MEAL_TIMES.DINNER;
 };

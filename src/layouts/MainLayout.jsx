@@ -1,40 +1,30 @@
-import {useState} from 'react'
-import {Layout, Menu, Button, Dropdown, Avatar, Drawer} from 'antd'
-import {Outlet, useNavigate, useLocation} from 'react-router-dom'
-import {useTranslation} from 'react-i18next'
-import {useAuth} from '@/hooks/useAuth'
+import { useState } from 'react';
+import { Layout, Menu, Button, Dropdown, Avatar, Drawer } from 'antd';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useAuth } from '@/hooks/useAuth';
 import {
     LogoutOutlined,
     MenuOutlined,
     GlobalOutlined,
     DashboardOutlined,
-    UserOutlined,
-    CarOutlined,
     CalendarOutlined,
-    DollarOutlined,
-    FileTextOutlined,
-    SettingOutlined,
-    TeamOutlined,
-    PlusOutlined,
-    SwapOutlined,
-    SendOutlined,
-    BarChartOutlined,
-} from '@ant-design/icons'
-import {ROUTES} from '@/constants/routes'
+} from '@ant-design/icons';
+import { ROUTES } from '@/constants/routes';
 
-const {Header, Content} = Layout
+const { Header, Content } = Layout;
 
 /**
  * MainLayout - Transfer İletişim Projesi Ana Layout
  */
 const MainLayout = () => {
     // Mobil menü görünürlüğü için state
-    const [mobileMenuVisible, setMobileMenuVisible] = useState(false)
+    const [mobileMenuVisible, setMobileMenuVisible] = useState(false);
 
-    const {t, i18n} = useTranslation()  // Çoklu dil desteği
-    const navigate = useNavigate()      // Sayfa yönlendirmeleri
-    const location = useLocation()      // Aktif sayfa yolu
-    const {user, logout} = useAuth()    // Kullanıcı bilgileri ve çıkış fonksiyonu
+    const { t, i18n } = useTranslation();  // Çoklu dil desteği
+    const navigate = useNavigate();        // Sayfa yönlendirmeleri
+    const location = useLocation();        // Aktif sayfa yolu
+    const { user, logout } = useAuth();    // Kullanıcı bilgileri ve çıkış fonksiyonu
 
     /**
      * menuItems - Ana navigasyon menü öğeleri
@@ -43,13 +33,22 @@ const MainLayout = () => {
         {
             key: ROUTES.DASHBOARD || '/dashboard',
             icon: <DashboardOutlined />,
-            label: t('navigation.dashboard'),
+            label: t('navigation.dashboard') || 'Dashboard',
             onClick: () => {
-                navigate(ROUTES.DASHBOARD || '/dashboard')
-                setMobileMenuVisible(false)
+                navigate(ROUTES.DASHBOARD || '/dashboard');
+                setMobileMenuVisible(false);
             },
         },
-    ]
+        {
+            key: ROUTES.YEMEKHANE || '/yemekhane',
+            icon: <CalendarOutlined />,
+            label: 'Yemekhane',
+            onClick: () => {
+                navigate(ROUTES.YEMEKHANE || '/yemekhane');
+                setMobileMenuVisible(false);
+            },
+        },
+    ];
 
     /**
      * languageMenuItems - Dil seçim menüsü öğeleri
@@ -65,7 +64,7 @@ const MainLayout = () => {
             label: '🇬🇧 English',
             onClick: () => i18n.changeLanguage('en'),
         },
-    ]
+    ];
 
     /**
      * Kullanıcı menüsü (profil dropdown)
@@ -74,11 +73,11 @@ const MainLayout = () => {
         {
             key: 'logout',
             icon: <LogoutOutlined />,
-            label: t('auth.logout'),
+            label: t('auth.logout') || 'Çıkış',
             danger: true,
             onClick: logout,
         },
-    ]
+    ];
 
     return (
         <Layout className="min-h-screen bg-gray-50">
@@ -90,9 +89,7 @@ const MainLayout = () => {
                     padding: 0,
                 }}
             >
-                {/* GÜNCELLEME BURADA YAPILDI:
-                   Logo Bölümü - Tıklanabilir yapıldı
-                */}
+                {/* Logo Bölümü - Tıklanabilir */}
                 <div
                     className="flex items-center flex-shrink-0 px-4 cursor-pointer transition-opacity hover:opacity-80"
                     onClick={() => navigate(ROUTES.DASHBOARD || '/')}
@@ -139,7 +136,7 @@ const MainLayout = () => {
                     />
 
                     {/* Dil Değiştirici Dropdown */}
-                    <Dropdown menu={{items: languageMenuItems}} placement="bottomRight">
+                    <Dropdown menu={{ items: languageMenuItems }} placement="bottomRight">
                         <Button
                             type="text"
                             className="text-white hover:bg-gray-700 hidden sm:flex items-center"
@@ -150,7 +147,7 @@ const MainLayout = () => {
                     </Dropdown>
 
                     {/* Kullanıcı Bilgileri ve Menü */}
-                    <Dropdown menu={{items: userMenuItems}} placement="bottomRight">
+                    <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
                         <div className="flex items-center gap-2 cursor-pointer hover:bg-gray-700 hover:bg-opacity-50 px-3 py-2 rounded-lg transition">
                             {user?.profilePhoto ? (
                                 <Avatar
@@ -189,8 +186,8 @@ const MainLayout = () => {
                     <div
                         className="flex items-center cursor-pointer"
                         onClick={() => {
-                            navigate(ROUTES.DASHBOARD || '/')
-                            setMobileMenuVisible(false)
+                            navigate(ROUTES.DASHBOARD || '/');
+                            setMobileMenuVisible(false);
                         }}
                     >
                         <img
@@ -206,19 +203,18 @@ const MainLayout = () => {
                 open={mobileMenuVisible}
                 width={280}
             >
-                {/* ... Drawer içeriği aynı kaldı ... */}
                 <Menu
                     mode="vertical"
                     selectedKeys={[location.pathname]}
                     items={menuItems}
-                    style={{border: 0}}
+                    style={{ border: 0 }}
                 />
 
                 <div className="mt-4 pt-4 border-t border-gray-200 px-4">
                     <div className="flex items-center gap-3 mb-4">
                         <Avatar
                             size={48}
-                            style={{backgroundColor: '#06b6d4'}}
+                            style={{ backgroundColor: '#06b6d4' }}
                         >
                             {user?.fullName?.charAt(0) || 'U'}
                         </Avatar>
@@ -233,7 +229,7 @@ const MainLayout = () => {
                     <p className="text-gray-500 text-sm mb-2">Dil Seçimi</p>
                     <Menu
                         items={languageMenuItems}
-                        style={{border: 0}}
+                        style={{ border: 0 }}
                     />
 
                     <Button
@@ -243,7 +239,7 @@ const MainLayout = () => {
                         onClick={logout}
                         className="mt-4"
                     >
-                        {t('auth.logout')}
+                        {t('auth.logout') || 'Çıkış'}
                     </Button>
                 </div>
             </Drawer>
@@ -255,7 +251,7 @@ const MainLayout = () => {
                 </div>
             </Content>
         </Layout>
-    )
-}
+    );
+};
 
-export default MainLayout
+export default MainLayout;

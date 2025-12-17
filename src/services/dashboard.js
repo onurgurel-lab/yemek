@@ -1,56 +1,45 @@
-import axiosInstance from '@/utils/axiosInstance'
-import { API_ENDPOINTS } from '@/constants/api'
+/**
+ * Dashboard Servis Modülü
+ * Dashboard ile ilgili API isteklerini yönetir
+ */
+
+import axiosInstance from '@/utils/axiosInstance';
+import { API_ENDPOINTS } from '@/constants/api';
 
 /**
- * dashboardService - Dashboard servisi
+ * dashboardService - Dashboard veri servisi
  *
- * Dashboard sayfası için gerekli API işlemlerini yöneten servis katmanı.
- * axiosInstance kullanarak API ile iletişim kurar.
- *
- * Özellikler:
- * - Son transferleri getirme
- * - Dashboard istatistikleri
- *
- * API İletişimi:
- * - axiosInstance kullanır (önceden yapılandırılmış axios)
- * - Otomatik token ekleme (interceptor ile)
- * - Otomatik error handling
- * - Response data extraction
+ * Dashboard sayfasında gösterilecek istatistik ve son transfer verilerini
+ * API'den çeker.
  */
 export const dashboardService = {
     /**
-     * getRecentTransfers - Son transfer kayıtlarını getir
+     * getRecentTransfers - Son transferleri getirir
      *
-     * Dashboard'da gösterilecek son transfer listesini getirir.
-     * Varsayılan olarak en son 10 transfer kaydını döndürür.
+     * Dashboard'da son eklenen veya güncellenmiş transfer kayıtlarını
+     * listeler. Sayfalama desteği vardır.
      *
-     * @param {Object} params - Query parametreleri
-     * @param {number} [params.limit=10] - Getirilecek kayıt sayısı
-     * @param {number} [params.pageNumber=1] - Sayfa numarası
-     * @param {number} [params.pageSize=10] - Sayfa başına kayıt sayısı
-     * @returns {Promise<Object>} API response - { data, totalRecords, ... }
+     * @param {number} pageNumber - Sayfa numarası (varsayılan: 1)
+     * @param {number} pageSize - Sayfa başına kayıt sayısı (varsayılan: 10)
+     * @returns {Promise<Object>} API response - Son transferler
      *
      * @example
-     * // Basit kullanım - Son 10 transfer
-     * const result = await dashboardService.getRecentTransfers()
-     *
-     * @example
-     * // Özel limit ile
-     * const result = await dashboardService.getRecentTransfers({ limit: 5 })
+     * const transfers = await dashboardService.getRecentTransfers(1, 10)
+     * console.log(transfers.data)
      */
-    async getRecentTransfers(params = {}) {
-        // GET istekleri için params query string olarak gönderilir
-        const response = await axiosInstance.get(API_ENDPOINTS.GET_RECENT_TRANSFERS, { params })
-
-        // axiosInstance zaten response.data döndürdüğü için
-        // doğrudan response kullanılır
-        return response || {}
+    async getRecentTransfers(pageNumber = 1, pageSize = 10) {
+        const response = await axiosInstance.get(API_ENDPOINTS.GET_RECENT_TRANSFERS, {
+            params: {
+                pageNumber,
+                pageSize,
+            },
+        });
+        return response || { data: [], totalRecords: 0 };
     },
 
     /**
-     * getDashboardStats - Dashboard istatistiklerini getir
+     * getDashboardStats - Dashboard istatistiklerini getirir
      *
-     * Dashboard'da gösterilecek özet istatistikleri getirir.
      * Toplam transfer, bugünkü transferler, tamamlanan transferler vb.
      *
      * @returns {Promise<Object>} API response - İstatistik verileri
@@ -60,10 +49,10 @@ export const dashboardService = {
      * console.log(stats.totalTransfers)
      */
     async getDashboardStats() {
-        const response = await axiosInstance.get(API_ENDPOINTS.GET_DASHBOARD_STATS)
-        return response || {}
+        const response = await axiosInstance.get(API_ENDPOINTS.GET_DASHBOARD_STATS);
+        return response || {};
     },
-}
+};
 
 /**
  * API Response Formatı:
@@ -88,6 +77,19 @@ export const dashboardService = {
  *   hotel: 'Hilton Garden Inn',
  *   ...
  * }
+ *
+ * getDashboardStats() response:
+ * {
+ *   totalTransfers: 1500,
+ *   todayTransfers: 25,
+ *   completedTransfers: 1200,
+ *   pendingTransfers: 300,
+ *   monthlyStats: {
+ *     january: 120,
+ *     february: 135,
+ *     ...
+ *   }
+ * }
  */
 
 /**
@@ -99,3 +101,5 @@ export const dashboardService = {
  * - 404 Not Found: Kayıt bulunamadı
  * - 500 Server Error: Sunucu hatası
  */
+
+export default dashboardService;

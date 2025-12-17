@@ -91,116 +91,14 @@ export const canAccessRoute = (user, requiredRoles) => {
     if (!user || !user.roles || !Array.isArray(requiredRoles)) {
         return false;
     }
-    return requiredRoles.some((role) => user.roles.includes(role));
+    return requiredRoles.some(role => user.roles.includes(role));
 };
 
 /**
- * Kullanıcının menü yönetimi yetkisi olup olmadığını kontrol eder
+ * Menüde gösterilecek rotaları filtreler
  */
-export const canManageMenu = (user) => {
-    return hasRole(user, ADMIN) || hasRole(user, YEMEKHANE_ADMIN);
+export const getVisibleRoutes = (user) => {
+    return yemekhaneRoutes.filter(route => {
+        return route.showInMenu && canAccessRoute(user, route.roles);
+    });
 };
-
-/**
- * Kullanıcının yemekhane admini olup olmadığını kontrol eder
- */
-export const isYemekhaneAdmin = (user) => {
-    return hasRole(user, YEMEKHANE_ADMIN);
-};
-
-/**
- * Kullanıcının admin olup olmadığını kontrol eder
- */
-export const isAdmin = (user) => {
-    return hasRole(user, ADMIN);
-};
-
-// ==================== ROUTE YARDIMCI FONKSİYONLARI ====================
-
-/**
- * Kullanıcının erişebileceği rotaları döndürür
- */
-export const getAccessibleRoutes = (user) => {
-    if (!user) return [];
-    return yemekhaneRoutes.filter((route) => canAccessRoute(user, route.roles));
-};
-
-/**
- * Menüde gösterilecek rotaları döndürür
- */
-export const getMenuRoutes = (user) => {
-    return getAccessibleRoutes(user).filter((route) => route.showInMenu);
-};
-
-/**
- * Belirtilen path için breadcrumb verisini döndürür
- */
-export const getBreadcrumbs = (path) => {
-    return yemekhaneBreadcrumbs[path] || [];
-};
-
-/**
- * Belirtilen path için sayfa başlığını döndürür
- */
-export const getPageTitle = (path) => {
-    const route = yemekhaneRoutes.find((r) => r.path === path);
-    return route ? route.title : 'Yemekhane';
-};
-
-/**
- * React Router için route config oluşturur
- */
-export const createRouteConfig = () => {
-    return yemekhaneRoutes.map((route) => ({
-        path: route.path,
-        element: route.element,
-        exact: route.exact,
-    }));
-};
-
-/**
- * Ana yemekhane rotasını döndürür
- */
-export const getDefaultRoute = () => '/yemekhane';
-
-/**
- * Kullanıcının ilk erişebileceği rotayı döndürür
- */
-export const getFirstAccessibleRoute = (user) => {
-    const routes = getAccessibleRoutes(user);
-    return routes.length > 0 ? routes[0].path : null;
-};
-
-// ==================== NAVİGASYON YARDIMCILARI ====================
-
-/**
- * Yemekhane alt sayfalarının listesi
- */
-export const yemekhaneSubPages = {
-    MENU_VIEW: '/yemekhane',
-    MENU_MANAGEMENT: '/yemekhane/yonetim',
-    EXCEL_UPLOAD: '/yemekhane/excel-yukle',
-    REPORTS: '/yemekhane/raporlar',
-};
-
-/**
- * Path'in yemekhane modülüne ait olup olmadığını kontrol eder
- */
-export const isYemekhanePath = (path) => {
-    return path && path.startsWith('/yemekhane');
-};
-
-/**
- * Route için ikon adı döndürür (Ant Design Icon adları)
- */
-export const getRouteIcon = (path) => {
-    const iconMap = {
-        '/yemekhane': 'CalendarOutlined',
-        '/yemekhane/yonetim': 'EditOutlined',
-        '/yemekhane/excel-yukle': 'UploadOutlined',
-        '/yemekhane/raporlar': 'BarChartOutlined',
-    };
-    return iconMap[path] || 'AppstoreOutlined';
-};
-
-export default yemekhaneRoutes;

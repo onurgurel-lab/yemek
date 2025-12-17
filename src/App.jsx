@@ -1,10 +1,21 @@
-import { useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
-import { useSelector, useDispatch } from 'react-redux'
-import { Spin } from 'antd'
-import { ROUTE_CONFIG, ROUTES } from './constants/routes'
-import { validateAndLoadUser, checkTokenExpiry } from './store/slices/authSlice'
-import { setupAxiosInterceptors } from './utils/axiosInterceptor'
+import { useEffect, Suspense } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { useSelector, useDispatch } from 'react-redux';
+import { Spin } from 'antd';
+import { ROUTE_CONFIG, ROUTES } from './constants/routes';
+import { validateAndLoadUser, checkTokenExpiry } from './store/slices/authSlice';
+import { setupAxiosInterceptors } from './utils/axiosInterceptor';
+
+/**
+ * Loading Component - Lazy loading için
+ * Ant Design Spin'in tip prop'u sadece wrapper pattern'de çalışır
+ */
+const LoadingFallback = () => (
+    <div className="flex items-center justify-center min-h-[400px] flex-col gap-3">
+        <Spin size="large" />
+        <p className="text-gray-600">Yükleniyor...</p>
+    </div>
+);
 
 /**
  * Route Builder Helper
@@ -17,25 +28,36 @@ import { setupAxiosInterceptors } from './utils/axiosInterceptor'
  * @returns {JSX.Element} Route component
  */
 const buildRoute = (config, isAuthenticated) => {
-    const { path, element: Element, type, children, index, redirect } = config
+    const { path, element: Element, type, children, index, redirect, lazy } = config;
 
     // Index route için redirect kontrolü
     if (index && redirect) {
-        return <Route key="index" index element={<Navigate to={redirect} replace />} />
+        return <Route key="index" index element={<Navigate to={redirect} replace />} />;
     }
 
     // Element render mantığı
-    let routeElement
+    let routeElement;
 
     if (type === 'auth') {
         // Auth route: Giriş yapmışsa HOME'a yönlendir, değilse sayfayı göster
-        routeElement = !isAuthenticated ? <Element /> : <Navigate to={ROUTES.DASHBOARD} replace />
+        routeElement = !isAuthenticated ? <Element /> : <Navigate to={ROUTES.DASHBOARD} replace />;
     } else if (type === 'private') {
         // Private route: Giriş yapmamışsa LOGIN'e yönlendir, değilse sayfayı göster
-        routeElement = isAuthenticated ? <Element /> : <Navigate to={ROUTES.LOGIN} replace />
+        // Lazy loaded component'ler için Suspense wrapper ekle
+        if (lazy) {
+            routeElement = isAuthenticated ? (
+                <Suspense fallback={<LoadingFallback />}>
+                    <Element />
+                </Suspense>
+            ) : (
+                <Navigate to={ROUTES.LOGIN} replace />
+            );
+        } else {
+            routeElement = isAuthenticated ? <Element /> : <Navigate to={ROUTES.LOGIN} replace />;
+        }
     } else {
         // Public route: Direkt göster
-        routeElement = <Element />
+        routeElement = <Element />;
     }
 
     return (
@@ -43,8 +65,8 @@ const buildRoute = (config, isAuthenticated) => {
             {/* Alt route'ları recursive olarak oluştur */}
             {children?.map((child) => buildRoute(child, isAuthenticated))}
         </Route>
-    )
-}
+    );
+};
 
 /**
  * AppContent - Router içindeki ana içerik
@@ -53,28 +75,28 @@ const buildRoute = (config, isAuthenticated) => {
  * Authentication kontrolü, token validation ve route rendering işlemlerini yönetir.
  */
 function AppContent() {
-    const dispatch = useDispatch()
-    const navigate = useNavigate()
-    const { isAuthenticated, loading, initialized } = useSelector((state) => state.auth)
+    const dispatch = useDispatch();
+    const navigate = useNavigate();
+    const { isAuthenticated, loading, initialized } = useSelector((state) => state.auth);
 
     useEffect(() => {
         // Axios interceptor'ları kur (401/403 hatalarını yakala)
-        setupAxiosInterceptors(navigate, dispatch)
+        setupAxiosInterceptors(navigate, dispatch);
 
         // Uygulama başladığında cookie'deki token'ı validate et
-        dispatch(validateAndLoadUser())
+        dispatch(validateAndLoadUser());
 
         // Token süresini kontrol et
-        dispatch(checkTokenExpiry())
+        dispatch(checkTokenExpiry());
 
         // Her 5 dakikada bir token süresini kontrol et
         const tokenCheckInterval = setInterval(() => {
-            dispatch(checkTokenExpiry())
-        }, 5 * 60 * 1000) // 5 dakika
+            dispatch(checkTokenExpiry());
+        }, 5 * 60 * 1000); // 5 dakika
 
         // Cleanup: interval'i temizle
-        return () => clearInterval(tokenCheckInterval)
-    }, [dispatch, navigate])
+        return () => clearInterval(tokenCheckInterval);
+    }, [dispatch, navigate]);
 
     // İlk yükleme devam ediyorsa loading göster
     if (!initialized || loading) {
@@ -83,7 +105,7 @@ function AppContent() {
                 <Spin size="large" />
                 <p className="text-gray-600">Yükleniyor...</p>
             </div>
-        )
+        );
     }
 
     // Route'ları dinamik olarak oluştur
@@ -91,7 +113,7 @@ function AppContent() {
         <Routes>
             {ROUTE_CONFIG.map((config) => buildRoute(config, isAuthenticated))}
         </Routes>
-    )
+    );
 }
 
 /**
@@ -105,7 +127,7 @@ function App() {
         <Router>
             <AppContent />
         </Router>
-    )
+    );
 }
 
-export default App
+export default App;
