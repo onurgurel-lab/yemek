@@ -1,133 +1,205 @@
-import { useEffect, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { useSelector, useDispatch } from 'react-redux';
-import { Spin } from 'antd';
-import { ROUTE_CONFIG, ROUTES } from './constants/routes';
-import { validateAndLoadUser, checkTokenExpiry } from './store/slices/authSlice';
-import { setupAxiosInterceptors } from './utils/axiosInterceptor';
+/**
+ * App.jsx - Ana Uygulama Component'i
+ *
+ * Route yapılandırmasını kullanarak sayfaları render eder.
+ *
+ * @module App
+ */
+
+import React, { Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Provider } from 'react-redux';
+import { ConfigProvider, Spin } from 'antd';
+import trTR from 'antd/locale/tr_TR';
+
+import { store } from '@/store';
+import { useAuthInit } from '@/hooks/useAuthInit';
+import { ROUTES } from '@/constants/routes';
+
+// Layout
+import MainLayout from '@/layouts/MainLayout';
+
+// Pages
+import Login from '@/pages/Login';
+import Dashboard from '@/pages/Dashboard';
+import Example from '@/pages/Example';
+
+// Protected Routes
+import {
+    PrivateRoute,
+    AdminRoute,
+    PublicRoute,
+    PageLoading,
+    UnauthorizedPage
+} from '@/components/ProtectedRoute';
+
+// Yemekhane Pages - Lazy Loading
+const MenuView = React.lazy(() => import('@/pages/Yemekhane/MenuView'));
+const MenuManagement = React.lazy(() => import('@/pages/Yemekhane/MenuManagement'));
+const ExcelUpload = React.lazy(() => import('@/pages/Yemekhane/ExcelUpload'));
+const Reports = React.lazy(() => import('@/pages/Yemekhane/Reports'));
 
 /**
- * Loading Component - Lazy loading için
- * Ant Design Spin'in tip prop'u sadece wrapper pattern'de çalışır
+ * AppLoading - Uygulama başlatılırken gösterilecek loading
  */
-const LoadingFallback = () => (
-    <div className="flex items-center justify-center min-h-[400px] flex-col gap-3">
+const AppLoading = () => (
+    <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '100vh',
+        flexDirection: 'column',
+        gap: '16px'
+    }}>
         <Spin size="large" />
-        <p className="text-gray-600">Yükleniyor...</p>
+        <span style={{ color: '#666' }}>Uygulama başlatılıyor...</span>
     </div>
 );
 
 /**
- * Route Builder Helper
- *
- * Route yapılandırmasından React Router Route componentleri oluşturur.
- * Auth kontrolü ve yönlendirmeleri otomatik olarak yönetir.
- *
- * @param {Object} config - Route yapılandırma objesi
- * @param {boolean} isAuthenticated - Kullanıcının giriş durumu
- * @returns {JSX.Element} Route component
+ * AppContent - Auth initialization ile routes
  */
-const buildRoute = (config, isAuthenticated) => {
-    const { path, element: Element, type, children, index, redirect, lazy } = config;
+const AppContent = () => {
+    // Auth durumunu başlat (cookie kontrolü)
+    const { initialized } = useAuthInit();
 
-    // Index route için redirect kontrolü
-    if (index && redirect) {
-        return <Route key="index" index element={<Navigate to={redirect} replace />} />;
-    }
-
-    // Element render mantığı
-    let routeElement;
-
-    if (type === 'auth') {
-        // Auth route: Giriş yapmışsa HOME'a yönlendir, değilse sayfayı göster
-        routeElement = !isAuthenticated ? <Element /> : <Navigate to={ROUTES.DASHBOARD} replace />;
-    } else if (type === 'private') {
-        // Private route: Giriş yapmamışsa LOGIN'e yönlendir, değilse sayfayı göster
-        // Lazy loaded component'ler için Suspense wrapper ekle
-        if (lazy) {
-            routeElement = isAuthenticated ? (
-                <Suspense fallback={<LoadingFallback />}>
-                    <Element />
-                </Suspense>
-            ) : (
-                <Navigate to={ROUTES.LOGIN} replace />
-            );
-        } else {
-            routeElement = isAuthenticated ? <Element /> : <Navigate to={ROUTES.LOGIN} replace />;
-        }
-    } else {
-        // Public route: Direkt göster
-        routeElement = <Element />;
+    // Auth başlatılana kadar loading göster
+    if (!initialized) {
+        return <AppLoading />;
     }
 
     return (
-        <Route key={path || 'index'} path={path} index={index} element={routeElement}>
-            {/* Alt route'ları recursive olarak oluştur */}
-            {children?.map((child) => buildRoute(child, isAuthenticated))}
-        </Route>
+        <Routes>
+            {/* ==================== PUBLIC ROUTES ==================== */}
+            <Route
+                path={ROUTES.LOGIN}
+                element={
+                    <PublicRoute>
+                        <Login />
+                    </PublicRoute>
+                }
+            />
+
+            {/* ==================== PRIVATE ROUTES ==================== */}
+
+            {/* Dashboard */}
+            <Route
+                path={ROUTES.DASHBOARD}
+                element={
+                    <PrivateRoute>
+                        <MainLayout>
+                            <Dashboard />
+                        </MainLayout>
+                    </PrivateRoute>
+                }
+            />
+
+            {/* Example */}
+            <Route
+                path={ROUTES.EXAMPLE}
+                element={
+                    <PrivateRoute>
+                        <MainLayout>
+                            <Example />
+                        </MainLayout>
+                    </PrivateRoute>
+                }
+            />
+
+            {/* ==================== YEMEKHANE ROUTES ==================== */}
+
+            {/* Yemek Menüsü - Herkes erişebilir (giriş yapmış) */}
+            <Route
+                path={ROUTES.YEMEKHANE}
+                element={
+                    <PrivateRoute>
+                        <MainLayout>
+                            <Suspense fallback={<PageLoading />}>
+                                <MenuView />
+                            </Suspense>
+                        </MainLayout>
+                    </PrivateRoute>
+                }
+            />
+
+            {/* Menü Yönetimi - SADECE Admin/RaporAdmin */}
+            <Route
+                path={ROUTES.YEMEKHANE_MANAGEMENT}
+                element={
+                    <AdminRoute>
+                        <MainLayout>
+                            <Suspense fallback={<PageLoading />}>
+                                <MenuManagement />
+                            </Suspense>
+                        </MainLayout>
+                    </AdminRoute>
+                }
+            />
+
+            {/* Excel Yükle - SADECE Admin/RaporAdmin */}
+            <Route
+                path={ROUTES.YEMEKHANE_EXCEL}
+                element={
+                    <AdminRoute>
+                        <MainLayout>
+                            <Suspense fallback={<PageLoading />}>
+                                <ExcelUpload />
+                            </Suspense>
+                        </MainLayout>
+                    </AdminRoute>
+                }
+            />
+
+            {/* Raporlar - SADECE Admin/RaporAdmin */}
+            <Route
+                path={ROUTES.YEMEKHANE_REPORTS}
+                element={
+                    <AdminRoute>
+                        <MainLayout>
+                            <Suspense fallback={<PageLoading />}>
+                                <Reports />
+                            </Suspense>
+                        </MainLayout>
+                    </AdminRoute>
+                }
+            />
+
+            {/* ==================== OTHER ROUTES ==================== */}
+
+            {/* Unauthorized */}
+            <Route
+                path={ROUTES.UNAUTHORIZED}
+                element={<UnauthorizedPage />}
+            />
+
+            {/* Root - Dashboard'a yönlendir */}
+            <Route
+                path="/"
+                element={<Navigate to={ROUTES.DASHBOARD} replace />}
+            />
+
+            {/* 404 - Dashboard'a yönlendir */}
+            <Route
+                path="*"
+                element={<Navigate to={ROUTES.DASHBOARD} replace />}
+            />
+        </Routes>
     );
 };
 
 /**
- * AppContent - Router içindeki ana içerik
- *
- * Router hook'larını kullanabilmek için ayrı component.
- * Authentication kontrolü, token validation ve route rendering işlemlerini yönetir.
+ * App - Ana uygulama wrapper'ı
  */
-function AppContent() {
-    const dispatch = useDispatch();
-    const navigate = useNavigate();
-    const { isAuthenticated, loading, initialized } = useSelector((state) => state.auth);
-
-    useEffect(() => {
-        // Axios interceptor'ları kur (401/403 hatalarını yakala)
-        setupAxiosInterceptors(navigate, dispatch);
-
-        // Uygulama başladığında cookie'deki token'ı validate et
-        dispatch(validateAndLoadUser());
-
-        // Token süresini kontrol et
-        dispatch(checkTokenExpiry());
-
-        // Her 5 dakikada bir token süresini kontrol et
-        const tokenCheckInterval = setInterval(() => {
-            dispatch(checkTokenExpiry());
-        }, 5 * 60 * 1000); // 5 dakika
-
-        // Cleanup: interval'i temizle
-        return () => clearInterval(tokenCheckInterval);
-    }, [dispatch, navigate]);
-
-    // İlk yükleme devam ediyorsa loading göster
-    if (!initialized || loading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen flex-col gap-4">
-                <Spin size="large" />
-                <p className="text-gray-600">Yükleniyor...</p>
-            </div>
-        );
-    }
-
-    // Route'ları dinamik olarak oluştur
+const App = () => {
     return (
-        <Routes>
-            {ROUTE_CONFIG.map((config) => buildRoute(config, isAuthenticated))}
-        </Routes>
+        <Provider store={store}>
+            <ConfigProvider locale={trTR}>
+                <BrowserRouter>
+                    <AppContent />
+                </BrowserRouter>
+            </ConfigProvider>
+        </Provider>
     );
-}
-
-/**
- * App - Ana uygulama bileşeni
- *
- * BrowserRouter ile uygulamayı sarar ve routing'i başlatır.
- * Tüm route tanımları ROUTE_CONFIG'ten otomatik olarak okunur.
- */
-function App() {
-    return (
-        <Router>
-            <AppContent />
-        </Router>
-    );
-}
+};
 
 export default App;

@@ -1,8 +1,18 @@
+/**
+ * MainLayout.jsx - Ana Layout Component
+ *
+ * Admin/RaporAdmin rollerine göre yönetim menülerini gösterir.
+ * VITE_API_USER_ROLES'taki projeden roller alınır.
+ *
+ * @module layouts/MainLayout
+ */
+
 import { useState } from 'react';
-import { Layout, Menu, Button, Dropdown, Avatar, Drawer } from 'antd';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Layout, Menu, Button, Dropdown, Avatar, Drawer, Tag } from 'antd';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRoles } from '@/hooks/useUserRoles';
 import {
     LogoutOutlined,
     MenuOutlined,
@@ -13,6 +23,7 @@ import {
     UnorderedListOutlined,
     SettingOutlined,
     BarChartOutlined,
+    EditOutlined,
 } from '@ant-design/icons';
 import { ROUTES } from '@/constants/routes';
 
@@ -20,46 +31,56 @@ const { Header, Content } = Layout;
 
 /**
  * MainLayout - Transfer İletişim Projesi Ana Layout
+ *
+ * @param {Object} props
+ * @param {React.ReactNode} props.children - İçerik
  */
-const MainLayout = () => {
+const MainLayout = ({ children }) => {
     // Mobil menü görünürlüğü için state
     const [mobileMenuVisible, setMobileMenuVisible] = useState(false);
 
-    const { t, i18n } = useTranslation();  // Çoklu dil desteği
-    const navigate = useNavigate();        // Sayfa yönlendirmeleri
-    const location = useLocation();        // Aktif sayfa yolu
-    const { user, logout } = useAuth();    // Kullanıcı bilgileri ve çıkış fonksiyonu
+    const { t, i18n } = useTranslation();
+    const navigate = useNavigate();
+    const location = useLocation();
+    const { user, logout } = useAuth();
+
+    // Rol kontrolü için hook
+    const { canManageMenu, isAdmin, isYemekhaneAdmin, roles } = useUserRoles();
 
     /**
-     * menuItems - Ana navigasyon menü öğeleri
+     * Yemekhane alt menü öğelerini oluştur
+     * Admin/RaporAdmin rolü varsa yönetim menülerini ekle
      */
-    const menuItems = [
-        {
-            key: ROUTES.DASHBOARD || '/dashboard',
-            icon: <DashboardOutlined />,
-            label: t('navigation.dashboard') || 'Dashboard',
-            onClick: () => {
-                navigate(ROUTES.DASHBOARD || '/dashboard');
-                setMobileMenuVisible(false);
+    const getYemekhaneMenuChildren = () => {
+        // Temel menü - herkes görebilir
+        const baseItems = [
+            {
+                key: ROUTES.YEMEKHANE || '/yemekhane',
+                icon: <UnorderedListOutlined />,
+                label: 'Menü Görüntüle',
+                onClick: () => {
+                    navigate(ROUTES.YEMEKHANE || '/yemekhane');
+                    setMobileMenuVisible(false);
+                },
             },
-        },
-        {
-            key: 'yemekhane-menu',
-            icon: <CalendarOutlined />,
-            label: 'Yemekhane',
-            children: [
+        ];
+
+        // Admin/RaporAdmin için yönetim menüleri
+        if (canManageMenu) {
+            baseItems.push(
+                { type: 'divider' },
                 {
-                    key: ROUTES.YEMEKHANE || '/yemekhane',
-                    icon: <UnorderedListOutlined />,
-                    label: 'Menü Görüntüle',
-                    onClick: () => {
-                        navigate(ROUTES.YEMEKHANE || '/yemekhane');
-                        setMobileMenuVisible(false);
-                    },
+                    key: 'admin-label',
+                    type: 'group',
+                    label: (
+                        <span style={{ color: '#ff4d4f', fontWeight: 'bold', fontSize: '11px' }}>
+                            YÖNETİM
+                        </span>
+                    ),
                 },
                 {
                     key: ROUTES.YEMEKHANE_MANAGEMENT || '/yemekhane/yonetim',
-                    icon: <SettingOutlined />,
+                    icon: <EditOutlined />,
                     label: 'Menü Yönetimi',
                     onClick: () => {
                         navigate(ROUTES.YEMEKHANE_MANAGEMENT || '/yemekhane/yonetim');
@@ -83,8 +104,43 @@ const MainLayout = () => {
                         navigate(ROUTES.YEMEKHANE_REPORTS || '/yemekhane/raporlar');
                         setMobileMenuVisible(false);
                     },
-                },
-            ],
+                }
+            );
+        }
+
+        return baseItems;
+    };
+
+    /**
+     * menuItems - Ana navigasyon menü öğeleri
+     */
+    const menuItems = [
+        {
+            key: ROUTES.DASHBOARD || '/dashboard',
+            icon: <DashboardOutlined />,
+            label: t('navigation.dashboard') || 'Dashboard',
+            onClick: () => {
+                navigate(ROUTES.DASHBOARD || '/dashboard');
+                setMobileMenuVisible(false);
+            },
+        },
+        {
+            key: 'yemekhane-menu',
+            icon: <CalendarOutlined />,
+            label: (
+                <span>
+                    Yemekhane
+                    {canManageMenu && (
+                        <Tag
+                            color={isAdmin ? 'red' : 'orange'}
+                            style={{ marginLeft: 8, fontSize: '10px' }}
+                        >
+                            {isAdmin ? 'Admin' : 'Rapor'}
+                        </Tag>
+                    )}
+                </span>
+            ),
+            children: getYemekhaneMenuChildren(),
         },
     ];
 
@@ -108,6 +164,34 @@ const MainLayout = () => {
      * Kullanıcı menüsü (profil dropdown)
      */
     const userMenuItems = [
+        // Rol bilgisi göster
+        {
+            key: 'roles-info',
+            type: 'group',
+            label: (
+                <div style={{ padding: '4px 0' }}>
+                    <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>
+                        Roller:
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                        {roles.length > 0 ? (
+                            roles.map((role) => (
+                                <Tag
+                                    key={role}
+                                    color={role === 'Admin' ? 'red' : role === 'RaporAdmin' ? 'orange' : 'blue'}
+                                    style={{ fontSize: '10px' }}
+                                >
+                                    {role}
+                                </Tag>
+                            ))
+                        ) : (
+                            <Tag color="default" style={{ fontSize: '10px' }}>Rol yok</Tag>
+                        )}
+                    </div>
+                </div>
+            ),
+        },
+        { type: 'divider' },
         {
             key: 'logout',
             icon: <LogoutOutlined />,
@@ -119,7 +203,6 @@ const MainLayout = () => {
 
     /**
      * Aktif menü anahtarlarını hesapla
-     * Yemekhane alt sayfalarında parent menüyü de açık tut
      */
     const getSelectedKeys = () => {
         const path = location.pathname;
@@ -228,7 +311,7 @@ const MainLayout = () => {
                                     {user?.fullName || user?.username || 'User'}
                                 </div>
                                 <div className="text-xs text-gray-400">
-                                    {user?.email || 'user@example.com'}
+                                    {canManageMenu ? (isAdmin ? 'Admin' : 'RaporAdmin') : 'Kullanıcı'}
                                 </div>
                             </div>
                         </div>
@@ -283,6 +366,26 @@ const MainLayout = () => {
                         </div>
                     </div>
 
+                    {/* Roller */}
+                    <div className="mb-4">
+                        <div className="text-xs text-gray-500 mb-2">Roller:</div>
+                        <div className="flex flex-wrap gap-1">
+                            {roles.length > 0 ? (
+                                roles.map((role) => (
+                                    <Tag
+                                        key={role}
+                                        color={role === 'Admin' ? 'red' : role === 'RaporAdmin' ? 'orange' : 'blue'}
+                                        style={{ fontSize: '10px' }}
+                                    >
+                                        {role}
+                                    </Tag>
+                                ))
+                            ) : (
+                                <Tag color="default" style={{ fontSize: '10px' }}>Rol yok</Tag>
+                            )}
+                        </div>
+                    </div>
+
                     <p className="text-gray-500 text-sm mb-2">Dil Seçimi</p>
                     <Menu
                         items={languageMenuItems}
@@ -301,10 +404,10 @@ const MainLayout = () => {
                 </div>
             </Drawer>
 
-            {/* Ana İçerik Alanı */}
+            {/* Ana İçerik Alanı - children kullan */}
             <Content className="flex-1">
                 <div className="px-4 sm:px-6 py-8">
-                    <Outlet />
+                    {children}
                 </div>
             </Content>
         </Layout>
