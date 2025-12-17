@@ -9,6 +9,10 @@ import {
     GlobalOutlined,
     DashboardOutlined,
     CalendarOutlined,
+    UploadOutlined,
+    UnorderedListOutlined,
+    SettingOutlined,
+    BarChartOutlined,
 } from '@ant-design/icons';
 import { ROUTES } from '@/constants/routes';
 
@@ -40,13 +44,47 @@ const MainLayout = () => {
             },
         },
         {
-            key: ROUTES.YEMEKHANE || '/yemekhane',
+            key: 'yemekhane-menu',
             icon: <CalendarOutlined />,
             label: 'Yemekhane',
-            onClick: () => {
-                navigate(ROUTES.YEMEKHANE || '/yemekhane');
-                setMobileMenuVisible(false);
-            },
+            children: [
+                {
+                    key: ROUTES.YEMEKHANE || '/yemekhane',
+                    icon: <UnorderedListOutlined />,
+                    label: 'Menü Görüntüle',
+                    onClick: () => {
+                        navigate(ROUTES.YEMEKHANE || '/yemekhane');
+                        setMobileMenuVisible(false);
+                    },
+                },
+                {
+                    key: ROUTES.YEMEKHANE_MANAGEMENT || '/yemekhane/yonetim',
+                    icon: <SettingOutlined />,
+                    label: 'Menü Yönetimi',
+                    onClick: () => {
+                        navigate(ROUTES.YEMEKHANE_MANAGEMENT || '/yemekhane/yonetim');
+                        setMobileMenuVisible(false);
+                    },
+                },
+                {
+                    key: ROUTES.YEMEKHANE_EXCEL || '/yemekhane/excel-yukle',
+                    icon: <UploadOutlined />,
+                    label: 'Excel Yükle',
+                    onClick: () => {
+                        navigate(ROUTES.YEMEKHANE_EXCEL || '/yemekhane/excel-yukle');
+                        setMobileMenuVisible(false);
+                    },
+                },
+                {
+                    key: ROUTES.YEMEKHANE_REPORTS || '/yemekhane/raporlar',
+                    icon: <BarChartOutlined />,
+                    label: 'Raporlar',
+                    onClick: () => {
+                        navigate(ROUTES.YEMEKHANE_REPORTS || '/yemekhane/raporlar');
+                        setMobileMenuVisible(false);
+                    },
+                },
+            ],
         },
     ];
 
@@ -78,6 +116,23 @@ const MainLayout = () => {
             onClick: logout,
         },
     ];
+
+    /**
+     * Aktif menü anahtarlarını hesapla
+     * Yemekhane alt sayfalarında parent menüyü de açık tut
+     */
+    const getSelectedKeys = () => {
+        const path = location.pathname;
+        return [path];
+    };
+
+    const getOpenKeys = () => {
+        const path = location.pathname;
+        if (path.startsWith('/yemekhane')) {
+            return ['yemekhane-menu'];
+        }
+        return [];
+    };
 
     return (
         <Layout className="min-h-screen bg-gray-50">
@@ -114,7 +169,8 @@ const MainLayout = () => {
                 <div className="hidden lg:flex flex-1 items-center justify-center px-8">
                     <Menu
                         mode="horizontal"
-                        selectedKeys={[location.pathname]}
+                        selectedKeys={getSelectedKeys()}
+                        defaultOpenKeys={getOpenKeys()}
                         items={menuItems}
                         className="flex-1 bg-transparent border-0"
                         theme="dark"
@@ -204,8 +260,9 @@ const MainLayout = () => {
                 width={280}
             >
                 <Menu
-                    mode="vertical"
-                    selectedKeys={[location.pathname]}
+                    mode="inline"
+                    selectedKeys={getSelectedKeys()}
+                    defaultOpenKeys={getOpenKeys()}
                     items={menuItems}
                     style={{ border: 0 }}
                 />
