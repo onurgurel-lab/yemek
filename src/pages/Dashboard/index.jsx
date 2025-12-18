@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, Tabs, Input, Row, Col, Badge, Tag, Empty, Spin, Button, Typography, Space, Tooltip, Statistic } from 'antd';
 import { SearchOutlined, CalendarOutlined, FireOutlined, LeftOutlined, RightOutlined, StarOutlined } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -85,41 +85,67 @@ const Dashboard = () => {
     const [showRatingModal, setShowRatingModal] = useState(false);
     const [hasExistingEvaluation, setHasExistingEvaluation] = useState(false);
 
-    // Initialize
-    useEffect(() => {
-        const today = dayjs().format('YYYY-MM-DD');
-        const month = dayjs().format('YYYY-MM');
+    // Refs for preventing infinite loops
+    const isInitializedRef = useRef(false);
+    const previousDateRef = useRef(null);
 
-        dispatch(setSelectedDate(today));
-        dispatch(setCurrentMonth(month));
-        dispatch(setActiveTab(getDefaultMealTab()));
-        dispatch(fetchTodayMenu());
-    }, [dispatch]);
-
-    // Load menu when date changes
-    useEffect(() => {
-        if (selectedDate) {
-            dispatch(fetchMenuByDate(selectedDate));
-            checkExistingEvaluation();
-        }
-    }, [selectedDate, dispatch]);
-
-    // Check if user has existing evaluation for today
-    const checkExistingEvaluation = useCallback(async () => {
-        if (!user?.uId || !selectedDate) {
+    // Check if user has existing evaluation for a specific date
+    const checkExistingEvaluation = useCallback(async (dateToCheck) => {
+        if (!user?.uId || !dateToCheck) {
             setHasExistingEvaluation(false);
             return;
         }
 
         try {
-            const response = await dayPointService.getByDate(selectedDate);
+            const response = await dayPointService.getByDate(dateToCheck);
             const points = response?.data || [];
             const userPoint = points.find(p => p.uId === user.uId);
             setHasExistingEvaluation(!!userPoint);
         } catch (error) {
             setHasExistingEvaluation(false);
         }
-    }, [user, selectedDate]);
+    }, [user?.uId]);
+
+    // Initialize - runs only once on mount
+    useEffect(() => {
+        if (isInitializedRef.current) return;
+
+        const today = dayjs().format('YYYY-MM-DD');
+        const month = dayjs().format('YYYY-MM');
+
+        // Set initial values
+        dispatch(setSelectedDate(today));
+        dispatch(setCurrentMonth(month));
+        dispatch(setActiveTab(getDefaultMealTab()));
+
+        // Fetch today's menu
+        dispatch(fetchTodayMenu());
+
+        // Check evaluation for today
+        checkExistingEvaluation(today);
+
+        // Mark as initialized and store the initial date
+        previousDateRef.current = today;
+        isInitializedRef.current = true;
+    }, [dispatch, checkExistingEvaluation]);
+
+    // Load menu when date changes (only for user-initiated changes)
+    useEffect(() => {
+        // Skip if not initialized yet
+        if (!isInitializedRef.current) return;
+
+        // Skip if date hasn't actually changed
+        if (!selectedDate || selectedDate === previousDateRef.current) return;
+
+        // Update previous date ref
+        previousDateRef.current = selectedDate;
+
+        // Fetch menu for the new date
+        dispatch(fetchMenuByDate(selectedDate));
+
+        // Check evaluation for the new date
+        checkExistingEvaluation(selectedDate);
+    }, [selectedDate, dispatch, checkExistingEvaluation]);
 
     // Generate calendar days (42 days for 6 weeks)
     const calendarDays = useMemo(() => {
@@ -184,26 +210,26 @@ const Dashboard = () => {
     }, [filteredMenu]);
 
     // Navigation
-    const goToPrevMonth = () => {
+    const goToPrevMonth = useCallback(() => {
         const prev = dayjs(currentMonth + '-01').subtract(1, 'month').format('YYYY-MM');
         dispatch(setCurrentMonth(prev));
-    };
+    }, [currentMonth, dispatch]);
 
-    const goToNextMonth = () => {
+    const goToNextMonth = useCallback(() => {
         const next = dayjs(currentMonth + '-01').add(1, 'month').format('YYYY-MM');
         dispatch(setCurrentMonth(next));
-    };
+    }, [currentMonth, dispatch]);
 
-    const goToToday = () => {
+    const goToToday = useCallback(() => {
         const today = dayjs().format('YYYY-MM-DD');
         const month = dayjs().format('YYYY-MM');
-        dispatch(setSelectedDate(today));
         dispatch(setCurrentMonth(month));
-    };
+        dispatch(setSelectedDate(today));
+    }, [dispatch]);
 
-    const selectDate = (dateString) => {
+    const selectDate = useCallback((dateString) => {
         dispatch(setSelectedDate(dateString));
-    };
+    }, [dispatch]);
 
     // Search handling
     const handleSearch = useCallback((value) => {
@@ -215,28 +241,55 @@ const Dashboard = () => {
         }
     }, [dispatch]);
 
-    const goToDateFromSearch = (dateString) => {
+    const goToDateFromSearch = useCallback((dateString) => {
         const month = dayjs(dateString).format('YYYY-MM');
         dispatch(setCurrentMonth(month));
         dispatch(setSelectedDate(dateString));
         dispatch(clearSearchResults());
         dispatch(setSearchTerm(''));
-    };
+    }, [dispatch]);
 
     // Open rating modal
-    const openRatingModal = (item) => {
+    const openRatingModal = useCallback((item) => {
         setSelectedMenuItem(item);
         setShowRatingModal(true);
-    };
+    }, []);
+
+    // Close rating modal
+    const closeRatingModal = useCallback(() => {
+        setShowRatingModal(false);
+        setSelectedMenuItem(null);
+    }, []);
+
+    // Handle menu update after rating
+    const handleMenuUpdate = useCallback(() => {
+        if (selectedDate) {
+            dispatch(fetchMenuByDate(selectedDate));
+        }
+    }, [dispatch, selectedDate]);
+
+    // Handle day evaluation update
+    const handleEvaluationUpdate = useCallback(() => {
+        if (selectedDate) {
+            checkExistingEvaluation(selectedDate);
+        }
+    }, [selectedDate, checkExistingEvaluation]);
 
     // Get month title
-    const getMonthTitle = () => {
+    const getMonthTitle = useCallback(() => {
         const monthDate = dayjs(currentMonth + '-01');
         return `${MONTH_NAMES[monthDate.month()]} ${monthDate.year()}`;
-    };
+    }, [currentMonth]);
 
     // Check if selected date is today
-    const isTodaySelected = checkIsToday(selectedDate);
+    const isTodaySelected = useMemo(() => {
+        return checkIsToday(selectedDate);
+    }, [selectedDate]);
+
+    // Formatted selected date
+    const formattedSelectedDate = useMemo(() => {
+        return dayjs(selectedDate).format('DD MMMM YYYY dddd');
+    }, [selectedDate]);
 
     const tabItems = [
         { key: 'lunch', label: '🍽️ Öğle Yemeği' },
@@ -384,7 +437,7 @@ const Dashboard = () => {
                         <div style={{ marginBottom: 16 }}>
                             <Space>
                                 <Title level={4} style={{ margin: 0 }}>
-                                    {dayjs(selectedDate).format('DD MMMM YYYY dddd')}
+                                    {formattedSelectedDate}
                                 </Title>
                                 {isTodaySelected && <Badge status="success" text="Bugün" />}
                             </Space>
@@ -484,15 +537,15 @@ const Dashboard = () => {
             <MenuRating
                 menuItem={selectedMenuItem}
                 visible={showRatingModal}
-                onClose={() => setShowRatingModal(false)}
-                onUpdate={() => dispatch(fetchMenuByDate(selectedDate))}
+                onClose={closeRatingModal}
+                onUpdate={handleMenuUpdate}
             />
 
             <DayEvaluationModal
                 visible={showDayEvaluationPopup}
                 onClose={() => dispatch(toggleDayEvaluationPopup())}
                 date={selectedDate}
-                onUpdate={checkExistingEvaluation}
+                onUpdate={handleEvaluationUpdate}
             />
 
             <WeeklyMenuModal

@@ -402,7 +402,8 @@ const yemekhaneSlice = createSlice({
             .addCase(fetchMenuByDate.fulfilled, (state, action) => {
                 state.loading = false;
                 state.menuData = action.payload.data || [];
-                state.selectedDate = action.payload.date;
+                // NOT: selectedDate burada SET EDİLMEMELİ - döngüye neden olur!
+                // selectedDate sadece setSelectedDate action'ı ile değişmeli
             })
             .addCase(fetchMenuByDate.rejected, (state, action) => {
                 state.loading = false;
@@ -417,7 +418,8 @@ const yemekhaneSlice = createSlice({
             .addCase(fetchTodayMenu.fulfilled, (state, action) => {
                 state.loading = false;
                 state.menuData = action.payload || [];
-                state.selectedDate = new Date().toISOString().split('T')[0];
+                // NOT: selectedDate burada SET EDİLMEMELİ - döngüye neden olur!
+                // selectedDate sadece setSelectedDate action'ı ile değişmeli
             })
             .addCase(fetchTodayMenu.rejected, (state, action) => {
                 state.loading = false;

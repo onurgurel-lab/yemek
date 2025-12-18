@@ -2,6 +2,7 @@
  * App.jsx - Ana Uygulama Component'i
  *
  * Route yapılandırmasını kullanarak sayfaları render eder.
+ * Güncelleme: /yemekhane (Menü Görüntüle) route'u kaldırıldı - Dashboard'da gösteriliyor
  *
  * @module App
  */
@@ -33,8 +34,7 @@ import {
     UnauthorizedPage
 } from '@/components/ProtectedRoute';
 
-// Yemekhane Pages - Lazy Loading
-const MenuView = React.lazy(() => import('@/pages/Yemekhane/MenuView'));
+// Yemekhane Pages - Lazy Loading (MenuView kaldırıldı - Dashboard'da gösteriliyor)
 const MenuManagement = React.lazy(() => import('@/pages/Yemekhane/MenuManagement'));
 const ExcelUpload = React.lazy(() => import('@/pages/Yemekhane/ExcelUpload'));
 const Reports = React.lazy(() => import('@/pages/Yemekhane/Reports'));
@@ -82,7 +82,7 @@ const AppContent = () => {
 
             {/* ==================== PRIVATE ROUTES ==================== */}
 
-            {/* Dashboard */}
+            {/* Dashboard - Menü görüntüleme artık burada */}
             <Route
                 path={ROUTES.DASHBOARD}
                 element={
@@ -106,21 +106,8 @@ const AppContent = () => {
                 }
             />
 
-            {/* ==================== YEMEKHANE ROUTES ==================== */}
-
-            {/* Yemek Menüsü - Herkes erişebilir (giriş yapmış) */}
-            <Route
-                path={ROUTES.YEMEKHANE}
-                element={
-                    <PrivateRoute>
-                        <MainLayout>
-                            <Suspense fallback={<PageLoading />}>
-                                <MenuView />
-                            </Suspense>
-                        </MainLayout>
-                    </PrivateRoute>
-                }
-            />
+            {/* ==================== YEMEKHANE ADMIN ROUTES ==================== */}
+            {/* Not: /yemekhane (Menü Görüntüle) kaldırıldı - Dashboard'da gösteriliyor */}
 
             {/* Menü Yönetimi - SADECE Admin/RaporAdmin */}
             <Route
@@ -175,6 +162,12 @@ const AppContent = () => {
             {/* Root - Dashboard'a yönlendir */}
             <Route
                 path="/"
+                element={<Navigate to={ROUTES.DASHBOARD} replace />}
+            />
+
+            {/* Eski /yemekhane URL'sine girenler Dashboard'a yönlendirilsin */}
+            <Route
+                path="/yemekhane"
                 element={<Navigate to={ROUTES.DASHBOARD} replace />}
             />
 

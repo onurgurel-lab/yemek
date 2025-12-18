@@ -4,6 +4,9 @@
  * Admin/RaporAdmin rollerine göre yönetim menülerini gösterir.
  * VITE_API_USER_ROLES'taki projeden roller alınır.
  *
+ * Güncelleme: Yemekhane dropdown kaldırıldı, menüler doğrudan header'da listeleniyor
+ * Menü Görüntüle kaldırıldı (Dashboard'da gösteriliyor)
+ *
  * @module layouts/MainLayout
  */
 
@@ -18,9 +21,7 @@ import {
     MenuOutlined,
     GlobalOutlined,
     DashboardOutlined,
-    CalendarOutlined,
     UploadOutlined,
-    UnorderedListOutlined,
     SettingOutlined,
     BarChartOutlined,
     EditOutlined,
@@ -48,73 +49,11 @@ const MainLayout = ({ children }) => {
     const { canManageMenu, isAdmin, isYemekhaneAdmin, roles } = useUserRoles();
 
     /**
-     * Yemekhane alt menü öğelerini oluştur
-     * Admin/RaporAdmin rolü varsa yönetim menülerini ekle
-     */
-    const getYemekhaneMenuChildren = () => {
-        // Temel menü - herkes görebilir
-        const baseItems = [
-            {
-                key: ROUTES.YEMEKHANE || '/yemekhane',
-                icon: <UnorderedListOutlined />,
-                label: 'Menü Görüntüle',
-                onClick: () => {
-                    navigate(ROUTES.YEMEKHANE || '/yemekhane');
-                    setMobileMenuVisible(false);
-                },
-            },
-        ];
-
-        // Admin/RaporAdmin için yönetim menüleri
-        if (canManageMenu) {
-            baseItems.push(
-                { type: 'divider' },
-                {
-                    key: 'admin-label',
-                    type: 'group',
-                    label: (
-                        <span style={{ color: '#ff4d4f', fontWeight: 'bold', fontSize: '11px' }}>
-                            YÖNETİM
-                        </span>
-                    ),
-                },
-                {
-                    key: ROUTES.YEMEKHANE_MANAGEMENT || '/yemekhane/yonetim',
-                    icon: <EditOutlined />,
-                    label: 'Menü Yönetimi',
-                    onClick: () => {
-                        navigate(ROUTES.YEMEKHANE_MANAGEMENT || '/yemekhane/yonetim');
-                        setMobileMenuVisible(false);
-                    },
-                },
-                {
-                    key: ROUTES.YEMEKHANE_EXCEL || '/yemekhane/excel-yukle',
-                    icon: <UploadOutlined />,
-                    label: 'Excel Yükle',
-                    onClick: () => {
-                        navigate(ROUTES.YEMEKHANE_EXCEL || '/yemekhane/excel-yukle');
-                        setMobileMenuVisible(false);
-                    },
-                },
-                {
-                    key: ROUTES.YEMEKHANE_REPORTS || '/yemekhane/raporlar',
-                    icon: <BarChartOutlined />,
-                    label: 'Raporlar',
-                    onClick: () => {
-                        navigate(ROUTES.YEMEKHANE_REPORTS || '/yemekhane/raporlar');
-                        setMobileMenuVisible(false);
-                    },
-                }
-            );
-        }
-
-        return baseItems;
-    };
-
-    /**
      * menuItems - Ana navigasyon menü öğeleri
+     * Dropdown kaldırıldı, tüm menüler düz liste olarak header'da gösteriliyor
      */
     const menuItems = [
+        // Dashboard - herkes görebilir
         {
             key: ROUTES.DASHBOARD || '/dashboard',
             icon: <DashboardOutlined />,
@@ -124,24 +63,52 @@ const MainLayout = ({ children }) => {
                 setMobileMenuVisible(false);
             },
         },
-        {
-            key: 'yemekhane-menu',
-            icon: <CalendarOutlined />,
-            label: (
-                <span>
-                    Yemekhane
-                    {canManageMenu && (
-                        <Tag
-                            color={isAdmin ? 'red' : 'orange'}
-                            style={{ marginLeft: 8, fontSize: '10px' }}
-                        >
-                            {isAdmin ? 'Admin' : 'Rapor'}
-                        </Tag>
-                    )}
-                </span>
-            ),
-            children: getYemekhaneMenuChildren(),
-        },
+        // Menü Yönetimi - sadece Admin/RaporAdmin (dropdown değil, doğrudan header'da)
+        ...(canManageMenu ? [
+            {
+                key: ROUTES.YEMEKHANE_MANAGEMENT || '/yemekhane/yonetim',
+                icon: <EditOutlined />,
+                label: (
+                    <span>
+                        Menü Yönetimi
+                        {isAdmin && (
+                            <Tag color="red" style={{ marginLeft: 8, fontSize: '10px' }}>
+                                Admin
+                            </Tag>
+                        )}
+                        {isYemekhaneAdmin && !isAdmin && (
+                            <Tag color="orange" style={{ marginLeft: 8, fontSize: '10px' }}>
+                                Rapor
+                            </Tag>
+                        )}
+                    </span>
+                ),
+                onClick: () => {
+                    navigate(ROUTES.YEMEKHANE_MANAGEMENT || '/yemekhane/yonetim');
+                    setMobileMenuVisible(false);
+                },
+            },
+            // Excel Yükle - sadece Admin/RaporAdmin
+            {
+                key: ROUTES.YEMEKHANE_EXCEL || '/yemekhane/excel-yukle',
+                icon: <UploadOutlined />,
+                label: 'Excel Yükle',
+                onClick: () => {
+                    navigate(ROUTES.YEMEKHANE_EXCEL || '/yemekhane/excel-yukle');
+                    setMobileMenuVisible(false);
+                },
+            },
+            // Raporlar - sadece Admin/RaporAdmin
+            {
+                key: ROUTES.YEMEKHANE_REPORTS || '/yemekhane/raporlar',
+                icon: <BarChartOutlined />,
+                label: 'Raporlar',
+                onClick: () => {
+                    navigate(ROUTES.YEMEKHANE_REPORTS || '/yemekhane/raporlar');
+                    setMobileMenuVisible(false);
+                },
+            },
+        ] : []),
     ];
 
     /**
@@ -209,14 +176,6 @@ const MainLayout = ({ children }) => {
         return [path];
     };
 
-    const getOpenKeys = () => {
-        const path = location.pathname;
-        if (path.startsWith('/yemekhane')) {
-            return ['yemekhane-menu'];
-        }
-        return [];
-    };
-
     return (
         <Layout className="min-h-screen bg-gray-50">
             {/* Header - Üst navigasyon çubuğu */}
@@ -229,17 +188,19 @@ const MainLayout = ({ children }) => {
             >
                 {/* Logo Bölümü - Tıklanabilir */}
                 <div
-                    className="flex items-center flex-shrink-0 px-4 cursor-pointer transition-opacity hover:opacity-80"
+                    className="flex items-center h-full px-4 cursor-pointer hover:bg-gray-700 transition-colors"
                     onClick={() => navigate(ROUTES.DASHBOARD || '/')}
                 >
                     <img
                         src="/src/logo.png"
-                        alt="Doku Gate Logo"
-                        className="h-10 w-10 mr-3"
+                        alt="Logo"
+                        className="h-10 w-10 rounded-lg shadow-md"
+                        onError={(e) => {
+                            e.target.style.display = 'none';
+                        }}
                     />
-                    {/* Uygulama adı (mobile'da gizli) */}
-                    <div className="hidden sm:block">
-                        <h1 className="text-white text-xl font-bold tracking-wide uppercase">
+                    <div className="ml-3 hidden sm:block">
+                        <h1 className="text-white text-base font-bold tracking-wide m-0">
                             {import.meta.env.VITE_APP_NAME || 'Transfer'}
                         </h1>
                         <p className="text-gray-300 text-xs">
@@ -248,12 +209,11 @@ const MainLayout = ({ children }) => {
                     </div>
                 </div>
 
-                {/* Masaüstü Menü */}
+                {/* Masaüstü Menü - Düz liste (dropdown yok) */}
                 <div className="hidden lg:flex flex-1 items-center justify-center px-8">
                     <Menu
                         mode="horizontal"
                         selectedKeys={getSelectedKeys()}
-                        defaultOpenKeys={getOpenKeys()}
                         items={menuItems}
                         className="flex-1 bg-transparent border-0"
                         theme="dark"
@@ -291,26 +251,22 @@ const MainLayout = ({ children }) => {
                             {user?.profilePhoto ? (
                                 <Avatar
                                     src={user.profilePhoto}
-                                    size={40}
-                                    alt={user?.fullName || user?.username}
+                                    alt={user?.fullName}
+                                    size={36}
                                 />
                             ) : (
                                 <Avatar
-                                    size={40}
-                                    style={{
-                                        backgroundColor: '#06b6d4',
-                                        color: '#0f172a',
-                                        fontWeight: 'bold'
-                                    }}
+                                    size={36}
+                                    style={{ backgroundColor: '#06b6d4' }}
                                 >
-                                    {user?.fullName?.charAt(0) || user?.username?.charAt(0) || 'U'}
+                                    {user?.fullName?.charAt(0) || 'U'}
                                 </Avatar>
                             )}
                             <div className="hidden md:block text-left">
-                                <div className="text-sm font-medium text-white">
-                                    {user?.fullName || user?.username || 'User'}
+                                <div className="text-white text-sm font-medium">
+                                    {user?.fullName || user?.username}
                                 </div>
-                                <div className="text-xs text-gray-400">
+                                <div className="text-gray-400 text-xs">
                                     {canManageMenu ? (isAdmin ? 'Admin' : 'RaporAdmin') : 'Kullanıcı'}
                                 </div>
                             </div>
@@ -345,7 +301,6 @@ const MainLayout = ({ children }) => {
                 <Menu
                     mode="inline"
                     selectedKeys={getSelectedKeys()}
-                    defaultOpenKeys={getOpenKeys()}
                     items={menuItems}
                     style={{ border: 0 }}
                 />
@@ -375,40 +330,52 @@ const MainLayout = ({ children }) => {
                                     <Tag
                                         key={role}
                                         color={role === 'Admin' ? 'red' : role === 'RaporAdmin' ? 'orange' : 'blue'}
-                                        style={{ fontSize: '10px' }}
                                     >
                                         {role}
                                     </Tag>
                                 ))
                             ) : (
-                                <Tag color="default" style={{ fontSize: '10px' }}>Rol yok</Tag>
+                                <Tag color="default">Rol yok</Tag>
                             )}
                         </div>
                     </div>
 
-                    <p className="text-gray-500 text-sm mb-2">Dil Seçimi</p>
-                    <Menu
-                        items={languageMenuItems}
-                        style={{ border: 0 }}
-                    />
+                    {/* Dil Seçimi */}
+                    <div className="mb-4">
+                        <div className="text-xs text-gray-500 mb-2">Dil:</div>
+                        <div className="flex gap-2">
+                            <Button
+                                size="small"
+                                type={i18n.language === 'tr' ? 'primary' : 'default'}
+                                onClick={() => i18n.changeLanguage('tr')}
+                            >
+                                🇹🇷 TR
+                            </Button>
+                            <Button
+                                size="small"
+                                type={i18n.language === 'en' ? 'primary' : 'default'}
+                                onClick={() => i18n.changeLanguage('en')}
+                            >
+                                🇬🇧 EN
+                            </Button>
+                        </div>
+                    </div>
 
+                    {/* Çıkış */}
                     <Button
                         danger
                         block
                         icon={<LogoutOutlined />}
                         onClick={logout}
-                        className="mt-4"
                     >
-                        {t('auth.logout') || 'Çıkış'}
+                        {t('auth.logout') || 'Çıkış Yap'}
                     </Button>
                 </div>
             </Drawer>
 
-            {/* Ana İçerik Alanı - children kullan */}
-            <Content className="flex-1">
-                <div className="px-4 sm:px-6 py-8">
-                    {children}
-                </div>
+            {/* Ana İçerik */}
+            <Content className="p-4 lg:p-6">
+                {children}
             </Content>
         </Layout>
     );
