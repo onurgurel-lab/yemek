@@ -78,9 +78,6 @@ export const yemekhaneBreadcrumbs = {
 
 /**
  * Kullanıcının belirtilen role sahip olup olmadığını kontrol eder
- * @param {Object} user - Kullanıcı objesi
- * @param {string} role - Kontrol edilecek rol
- * @returns {boolean}
  */
 export const hasRole = (user, role) => {
     if (!user || !user.roles) return false;
@@ -89,9 +86,6 @@ export const hasRole = (user, role) => {
 
 /**
  * Kullanıcının rotaya erişim yetkisi olup olmadığını kontrol eder
- * @param {Object} user - Kullanıcı objesi
- * @param {Array} requiredRoles - Gerekli roller
- * @returns {boolean}
  */
 export const canAccessRoute = (user, requiredRoles) => {
     if (!user || !user.roles || !Array.isArray(requiredRoles)) {
@@ -101,46 +95,10 @@ export const canAccessRoute = (user, requiredRoles) => {
 };
 
 /**
- * Kullanıcının menü yönetimi yetkisi olup olmadığını kontrol eder
- * Admin veya YemekhaneAdmin rolüne sahip kullanıcılar menü yönetebilir
- * @param {Object} user - Kullanıcı objesi
- * @returns {boolean}
- */
-export const canManageMenu = (user) => {
-    if (!user) return false;
-
-    // Roller array içinde mi kontrol et
-    if (user.roles && Array.isArray(user.roles)) {
-        return user.roles.includes(ADMIN) || user.roles.includes(YEMEKHANE_ADMIN);
-    }
-
-    // Tek rol string olarak gelebilir
-    if (user.role) {
-        return user.role === ADMIN || user.role === YEMEKHANE_ADMIN;
-    }
-
-    return false;
-};
-
-/**
  * Menüde gösterilecek rotaları filtreler
- * @param {Object} user - Kullanıcı objesi
- * @returns {Array} Kullanıcının görebileceği rotalar
  */
 export const getVisibleRoutes = (user) => {
     return yemekhaneRoutes.filter(route => {
         return route.showInMenu && canAccessRoute(user, route.roles);
     });
-};
-
-/**
- * Kullanıcının belirtilen rotaya erişip erişemeyeceğini kontrol eder
- * @param {Object} user - Kullanıcı objesi
- * @param {string} path - Rota yolu
- * @returns {boolean}
- */
-export const canAccessPath = (user, path) => {
-    const route = yemekhaneRoutes.find(r => r.path === path);
-    if (!route) return false;
-    return canAccessRoute(user, route.roles);
 };

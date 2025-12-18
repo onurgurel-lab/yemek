@@ -12,18 +12,41 @@ const axiosInstance = axios.create({
     timeout: API_CONFIG.TIMEOUT,
 })
 
+/**
+ * getAuthToken - Token'ı güvenilir şekilde al
+ *
+ * Öncelik sırası:
+ * 1. Cookie'deki authToken (en güvenilir)
+ * 2. localStorage'daki token
+ *
+ * @returns {string|null} JWT token veya null
+ */
+const getAuthToken = () => {
+    // 1. Önce cookie'den al (daha güvenilir)
+    const authCookie = cookieUtils.getAuthCookie()
+    if (authCookie?.authToken) {
+        return authCookie.authToken
+    }
+
+    // 2. Cookie'de token key'i varsa onu dene
+    if (authCookie?.token) {
+        return authCookie.token
+    }
+
+    // 3. localStorage'dan dene
+    const localToken = localStorage.getItem(STORAGE_KEYS.TOKEN)
+    if (localToken) {
+        return localToken
+    }
+
+    return null
+}
+
 // Request interceptor
 axiosInstance.interceptors.request.use(
     (config) => {
-        // Token'ı localStorage'dan veya cookie'den al
-        let token = localStorage.getItem(STORAGE_KEYS.TOKEN)
-
-        if (!token) {
-            const authCookie = cookieUtils.getAuthCookie()
-            if (authCookie && authCookie.authToken) {
-                token = authCookie.authToken
-            }
-        }
+        // Token'ı al
+        const token = getAuthToken()
 
         if (token) {
             config.headers.Authorization = `Bearer ${token}`
@@ -51,6 +74,9 @@ axiosInstance.interceptors.request.use(
             }
         }
 
+        // Debug: Token kontrolü
+        console.log('🔐 Request to:', config.url, '| Token:', token ? 'Present ✓' : 'Missing ✗')
+
         return config
     },
     (error) => {
@@ -77,10 +103,12 @@ axiosInstance.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config
 
+        // 401 hatası ve henüz retry yapılmadıysa
         if (error.response?.status === HTTP_STATUS.UNAUTHORIZED && !originalRequest._retry) {
             originalRequest._retry = true
 
             try {
+                // Refresh token'ı dene
                 const refreshToken = localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN)
                 if (refreshToken) {
                     const formData = createFormData({ refreshToken })
@@ -96,20 +124,26 @@ axiosInstance.interceptors.response.use(
 
                     if (response.data.isSuccess) {
                         const { token } = response.data.result
+
+                        // Token'ları güncelle
                         localStorage.setItem(STORAGE_KEYS.TOKEN, token)
 
                         // Cookie'yi de güncelle
+                        const currentCookie = cookieUtils.getAuthCookie() || {}
                         cookieUtils.setAuthCookie({
+                            ...currentCookie,
+                            authToken: token,
                             token: token,
-                            username: localStorage.getItem('username'),
                             expirationDate: response.data.result.expirationDate
                         })
 
+                        // Yeni token ile isteği tekrarla
                         originalRequest.headers.Authorization = `Bearer ${token}`
                         return axiosInstance(originalRequest)
                     }
                 }
             } catch (refreshError) {
+                console.error('❌ Token refresh failed:', refreshError)
                 // Refresh başarısız, logout yap
                 localStorage.removeItem(STORAGE_KEYS.TOKEN)
                 localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN)
@@ -135,4 +169,6 @@ axiosInstance.interceptors.response.use(
     }
 )
 
+// Token getter'ı export et (diğer modüller kullanabilsin)
+export { getAuthToken }
 export default axiosInstance

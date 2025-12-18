@@ -1,13 +1,14 @@
 /**
  * Lookup Servis Modülü
  * Referans verileri (dropdown/select) API servisi
+ *
+ * ✅ DÜZELTME: Tüm isteklerde axiosInstance kullanılıyor
+ * Bu sayede token otomatik olarak header'a ekleniyor
  */
 
-import axiosInstance from '@/utils/axiosInstance';
+import axiosInstance, { getAuthToken } from '@/utils/axiosInstance';
 import axios from 'axios';
 import { API_ENDPOINTS, API_CONFIG } from '@/constants/api';
-import { STORAGE_KEYS } from '@/constants/config';
-import { cookieUtils } from '@/utils/cookies';
 
 /**
  * lookupService - Referans Verileri Servisi
@@ -18,6 +19,7 @@ import { cookieUtils } from '@/utils/cookies';
  * Endpoint'ler:
  * - Ülke Listesi: /api/Country
  * - Otel Listesi: /api/Hotel
+ * - Havayolu Listesi: /api/Airline
  * - Kullanıcı Listesi: https://umapi.dokugate.com/api/User/get-all
  */
 export const lookupService = {
@@ -27,25 +29,10 @@ export const lookupService = {
      * API Endpoint: GET /api/Country
      *
      * @returns {Promise<Array>} Ülke listesi
-     *
-     * Beklenen Response Format:
-     * {
-     *   error: false,
-     *   data: [
-     *     { id: 1, name: "Türkiye", code: "TR" },
-     *     { id: 2, name: "Germany", code: "DE" },
-     *     ...
-     *   ],
-     *   message: "İşlem başarılı",
-     *   code: 200
-     * }
      */
     async getCountries() {
         try {
             const response = await axiosInstance.get(API_ENDPOINTS.GET_COUNTRIES);
-            // API response formatına göre data'yı döndür
-            // axiosInstance interceptor zaten response.data döndürüyor
-            // eğer data array ise direkt döndür, değilse data.items veya boş array döndür
             if (Array.isArray(response)) {
                 return response;
             }
@@ -68,18 +55,6 @@ export const lookupService = {
      * API Endpoint: GET /api/Hotel
      *
      * @returns {Promise<Array>} Otel listesi
-     *
-     * Beklenen Response Format:
-     * {
-     *   error: false,
-     *   data: [
-     *     { id: 1, name: "Hilton Garden Inn", address: "..." },
-     *     { id: 2, name: "Sheraton", address: "..." },
-     *     ...
-     *   ],
-     *   message: "İşlem başarılı",
-     *   code: 200
-     * }
      */
     async getHotels() {
         try {
@@ -131,28 +106,25 @@ export const lookupService = {
      *
      * API Endpoint: GET https://umapi.dokugate.com/api/User/get-all
      *
-     * DİKKAT: Bu endpoint farklı bir domain'de olduğu için
-     * manuel token ekleme gerekebilir.
+     * ✅ DÜZELTME: Token artık doğru şekilde alınıyor
+     * getAuthToken() fonksiyonu cookie ve localStorage'dan doğru token'ı alır
      *
      * @returns {Promise<Array>} Kullanıcı listesi
-     *
-     * Beklenen Response Format:
-     * {
-     *   error: false,
-     *   data: [
-     *     { id: 1, name: "Dr. Ahmet", role: "Doctor" },
-     *     { id: 2, name: "Ayşe", role: "SalesConsultant" },
-     *     ...
-     *   ]
-     * }
      */
     async getUsers() {
         try {
-            // Token'ı al (cookie veya localStorage'dan)
-            const token = cookieUtils.getCookie(STORAGE_KEYS.TOKEN) ||
-                localStorage.getItem(STORAGE_KEYS.TOKEN);
+            // ✅ DÜZELTME: Token'ı merkezi fonksiyondan al
+            const token = getAuthToken();
+
+            if (!token) {
+                console.error('❌ getUsers: Token bulunamadı!');
+                throw new Error('Authentication token not found');
+            }
+
+            console.log('🔐 getUsers: Token alındı, istek gönderiliyor...');
 
             // Farklı domain olduğu için axios instance yerine direkt axios kullan
+            // Ama token'ı doğru şekilde ekle
             const response = await axios.get(API_ENDPOINTS.GET_USERS, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -174,7 +146,14 @@ export const lookupService = {
             }
             return data || [];
         } catch (error) {
-            console.error('getUsers error:', error);
+            console.error('❌ getUsers error:', error);
+
+            // 401 hatası için özel log
+            if (error.response?.status === 401) {
+                console.error('❌ 401 Unauthorized - Token geçersiz veya eksik');
+                console.error('📋 Request headers:', error.config?.headers);
+            }
+
             throw error;
         }
     },
@@ -186,13 +165,13 @@ export const lookupService = {
  * 1. Ülke listesi çekme:
  * ```javascript
  * const countries = await lookupService.getCountries();
- * // Select'te kullan
  * <Select options={countries.map(c => ({ value: c.id, label: c.name }))} />
  * ```
  *
  * 2. Otel listesi çekme:
  * ```javascript
  * const hotels = await lookupService.getHotels();
+ * <Select options={hotels.map(h => ({ value: h.id, label: h.name }))} />
  * ```
  *
  * 3. Kullanıcı listesi çekme:

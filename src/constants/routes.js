@@ -1,26 +1,19 @@
-import React from 'react';
-import { Navigate } from 'react-router-dom';
-import MainLayout from '@/layouts/MainLayout';
-import Login from '@/pages/Login';
-import Dashboard from '@/pages/Dashboard';
-import Example from '@/pages/Example';
+/**
+ * routes.js - Route Path Tanımları
+ *
+ * URL yollarını ve route yapılandırmasını içerir.
+ * JSX içermez, pure JavaScript.
+ *
+ * @module constants/routes
+ */
 
-// Yemekhane sayfaları - Lazy loading
-const MenuView = React.lazy(() => import('@/pages/Yemekhane/MenuView'));
-const MenuManagement = React.lazy(() => import('@/pages/Yemekhane/MenuManagement'));
-const ExcelUpload = React.lazy(() => import('@/pages/Yemekhane/ExcelUpload'));
-const Reports = React.lazy(() => import('@/pages/Yemekhane/Reports'));
+import React from 'react';
+
+// ==================== ROUTE PATHS ====================
 
 /**
- * ROUTE PATHS - URL Yolları
- *
- * Tüm route path'lerini içeren merkezi obje.
+ * ROUTES - URL Yolları
  * Navigation, redirect ve link işlemlerinde kullanılır.
- *
- * Kullanım:
- * - navigate(ROUTES.DASHBOARD)
- * - <Link to={ROUTES.LOGIN}>
- * - <Navigate to={ROUTES.EXAMPLE} />
  */
 export const ROUTES = {
     DASHBOARD: '/dashboard',
@@ -32,110 +25,108 @@ export const ROUTES = {
     YEMEKHANE_MANAGEMENT: '/yemekhane/yonetim',
     YEMEKHANE_EXCEL: '/yemekhane/excel-yukle',
     YEMEKHANE_REPORTS: '/yemekhane/raporlar',
+    // Unauthorized
+    UNAUTHORIZED: '/unauthorized',
+};
+
+// ==================== LAZY LOAD COMPONENTS ====================
+
+// Yemekhane sayfaları - Lazy loading
+export const MenuView = React.lazy(function() {
+    return import('@/pages/Yemekhane/MenuView');
+});
+
+export const MenuManagement = React.lazy(function() {
+    return import('@/pages/Yemekhane/MenuManagement');
+});
+
+export const ExcelUpload = React.lazy(function() {
+    return import('@/pages/Yemekhane/ExcelUpload');
+});
+
+export const Reports = React.lazy(function() {
+    return import('@/pages/Yemekhane/Reports');
+});
+
+// ==================== ROUTE CONFIG ====================
+
+/**
+ * Route yapılandırması
+ * App.jsx'te kullanılır
+ */
+export const routeConfigData = [
+    // Public
+    {
+        path: ROUTES.LOGIN,
+        type: 'public',
+        component: 'Login',
+    },
+    // Private
+    {
+        path: ROUTES.DASHBOARD,
+        type: 'private',
+        component: 'Dashboard',
+    },
+    {
+        path: ROUTES.EXAMPLE,
+        type: 'private',
+        component: 'Example',
+    },
+    // Yemekhane - Private
+    {
+        path: ROUTES.YEMEKHANE,
+        type: 'private',
+        component: 'MenuView',
+        lazy: true,
+    },
+    // Yemekhane - Admin Only
+    {
+        path: ROUTES.YEMEKHANE_MANAGEMENT,
+        type: 'admin',
+        component: 'MenuManagement',
+        lazy: true,
+    },
+    {
+        path: ROUTES.YEMEKHANE_EXCEL,
+        type: 'admin',
+        component: 'ExcelUpload',
+        lazy: true,
+    },
+    {
+        path: ROUTES.YEMEKHANE_REPORTS,
+        type: 'admin',
+        component: 'Reports',
+        lazy: true,
+    },
+];
+
+// ==================== HELPER FUNCTIONS ====================
+
+/**
+ * getAdminRoutes - Admin route'larını döndürür
+ */
+export const getAdminRoutes = function() {
+    return routeConfigData.filter(function(route) {
+        return route.type === 'admin';
+    });
 };
 
 /**
- * ROUTE CONFIGURATIONS - Route Tanımları ve Elementleri
- *
- * Her route için gerekli tüm bilgileri içeren merkezi yapılandırma.
- * App.jsx bu yapılandırmayı okuyarak otomatik route oluşturur.
- *
- * Route Türleri:
- * - public: Herkese açık, kimlik doğrulama gerektirmeyen
- * - private: Giriş yapmış kullanıcılara özel (token gerektirir)
- * - auth: Sadece giriş yapmamış kullanıcılara açık (login, register vb.)
- *
- * NOT: Lazy loaded component'ler için Suspense wrapper'ı App.jsx'te uygulanır
+ * getPrivateRoutes - Private route'larını döndürür
  */
-export const ROUTE_CONFIG = [
-    // ==========================================
-    // AUTH ROUTES - Sadece giriş yapmamış kullanıcılar için
-    // ==========================================
-    {
-        path: ROUTES.LOGIN,
-        element: Login,
-        type: 'auth',
-        requiresAuth: false,
-    },
-
-    // ==========================================
-    // PRIVATE ROUTES - Layout içinde, giriş gerektirir
-    // ==========================================
-    {
-        path: '/',
-        element: MainLayout,
-        type: 'private',
-        requiresAuth: true,
-        children: [
-            // Ana route'a yönlendirme
-            {
-                index: true,
-                redirect: ROUTES.DASHBOARD,
-            },
-            // Ana sayfa (Dashboard)
-            {
-                path: ROUTES.DASHBOARD,
-                element: Dashboard,
-                type: 'private',
-                requiresAuth: true,
-            },
-            // Örnek sayfa
-            {
-                path: ROUTES.EXAMPLE,
-                element: Example,
-                type: 'private',
-                requiresAuth: true,
-            },
-            // ==========================================
-            // YEMEKHANE ROUTES - Lazy loaded
-            // ==========================================
-            {
-                path: ROUTES.YEMEKHANE,
-                element: MenuView,
-                type: 'private',
-                requiresAuth: true,
-                lazy: true,
-            },
-            {
-                path: ROUTES.YEMEKHANE_MANAGEMENT,
-                element: MenuManagement,
-                type: 'private',
-                requiresAuth: true,
-                lazy: true,
-            },
-            {
-                path: ROUTES.YEMEKHANE_EXCEL,
-                element: ExcelUpload,
-                type: 'private',
-                requiresAuth: true,
-                lazy: true,
-            },
-            {
-                path: ROUTES.YEMEKHANE_REPORTS,
-                element: Reports,
-                type: 'private',
-                requiresAuth: true,
-                lazy: true,
-            },
-        ],
-    },
-];
+export const getPrivateRoutes = function() {
+    return routeConfigData.filter(function(route) {
+        return route.type === 'private';
+    });
+};
 
 /**
- * PUBLIC_ROUTES - Herkese açık sayfalar
+ * getPublicRoutes - Public route'larını döndürür
  */
-export const PUBLIC_ROUTES = [ROUTES.LOGIN];
-
-/**
- * PRIVATE_ROUTES - Giriş gerektiren sayfalar
- */
-export const PRIVATE_ROUTES = [
-    ROUTES.DASHBOARD,
-    ROUTES.EXAMPLE,
-    ROUTES.YEMEKHANE,
-    ROUTES.YEMEKHANE_MANAGEMENT,
-    ROUTES.YEMEKHANE_EXCEL,
-    ROUTES.YEMEKHANE_REPORTS,
-];
+export const getPublicRoutes = function() {
+    return routeConfigData.filter(function(route) {
+        return route.type === 'public';
+    });
+};
 
 export default ROUTES;

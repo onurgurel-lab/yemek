@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal, Form, DatePicker, Checkbox, Button, Space, Typography, Alert, Progress, message, Divider } from 'antd';
 import { CopyOutlined, SwapRightOutlined, WarningOutlined } from '@ant-design/icons';
-import mealMenuService from '@/services/mealMenuService';
+import { mealMenuService } from '@/services/mealMenuService';
 import { MEAL_TIMES, MONTH_NAMES } from '@/constants/mealMenuApi';
 import dayjs from 'dayjs';
 import 'dayjs/locale/tr';
@@ -80,14 +80,15 @@ const MenuCopyModule = ({ visible, onClose, onCopyComplete }) => {
             setPreviewData({
                 sourceMonth: getMonthName(sourceMonth),
                 targetMonth: getMonthName(targetMonth),
-                sourceMenuCount: filteredMenus.length,
+                sourceCount: filteredMenus.length,
                 targetExistingCount: targetMenus.length,
                 copyLunch,
                 copyDinner,
                 overwriteExisting,
+                sourceMenus: filteredMenus,
+                targetMenus,
                 sourceMonthStart,
-                targetMonthStart,
-                filteredMenus
+                targetMonthStart
             });
 
             setStep('preview');
@@ -99,69 +100,92 @@ const MenuCopyModule = ({ visible, onClose, onCopyComplete }) => {
         }
     };
 
-    // Execute copy operation
+    // Execute copy
     const handleCopy = async () => {
         if (!previewData) return;
 
         setStep('copying');
         setProgress(0);
+        setLoading(true);
 
-        const { filteredMenus, sourceMonthStart, targetMonthStart, overwriteExisting } = previewData;
-        const totalItems = filteredMenus.length;
-        let successCount = 0;
-        let errorCount = 0;
+        try {
+            const { sourceMenus, targetMenus, overwriteExisting, sourceMonthStart, targetMonthStart } = previewData;
 
-        for (let i = 0; i < filteredMenus.length; i++) {
-            const menu = filteredMenus[i];
+            let successCount = 0;
+            let skipCount = 0;
+            let errorCount = 0;
+            const total = sourceMenus.length;
 
-            try {
-                // Calculate the day of month from source
-                const sourceDate = dayjs(menu.menuDate);
-                const dayOfMonth = sourceDate.date();
+            for (let i = 0; i < sourceMenus.length; i++) {
+                const menu = sourceMenus[i];
 
-                // Calculate target date (same day of month in target month)
-                let targetDate = targetMonthStart.date(dayOfMonth);
+                try {
+                    // Calculate new date (same day of month in target month)
+                    const sourceDate = dayjs(menu.menuDate);
+                    const dayOfMonth = sourceDate.date();
+                    const targetMonthEndDay = targetMonthStart.endOf('month').date();
 
-                // Handle edge cases (e.g., Feb 30 doesn't exist)
-                const targetMonthEnd = targetMonthStart.endOf('month').date();
-                if (dayOfMonth > targetMonthEnd) {
-                    targetDate = targetMonthStart.endOf('month');
+                    // Skip if day doesn't exist in target month
+                    if (dayOfMonth > targetMonthEndDay) {
+                        skipCount++;
+                        continue;
+                    }
+
+                    const newDate = targetMonthStart.date(dayOfMonth).format('YYYY-MM-DD');
+
+                    // Check if target already has this item
+                    const existsInTarget = targetMenus.some(t =>
+                        dayjs(t.menuDate).format('YYYY-MM-DD') === newDate &&
+                        t.mealTime === menu.mealTime &&
+                        t.foodName === menu.foodName
+                    );
+
+                    if (existsInTarget && !overwriteExisting) {
+                        skipCount++;
+                    } else {
+                        // Create new menu item
+                        await mealMenuService.createMenuItem({
+                            foodName: menu.foodName,
+                            category: menu.category,
+                            calorie: menu.calorie,
+                            menuDate: newDate,
+                            mealTime: menu.mealTime
+                        });
+                        successCount++;
+                    }
+                } catch (err) {
+                    console.error('Menü kopyalanırken hata:', err);
+                    errorCount++;
                 }
 
-                const newMenuData = {
-                    foodName: menu.foodName,
-                    category: menu.category,
-                    calorie: menu.calorie,
-                    menuDate: targetDate.format('YYYY-MM-DD'),
-                    mealTime: menu.mealTime
-                };
-
-                await mealMenuService.createMenuItem(newMenuData);
-                successCount++;
-            } catch (error) {
-                console.error('Menü kopyalanırken hata:', error);
-                errorCount++;
+                // Update progress
+                setProgress(Math.round(((i + 1) / total) * 100));
             }
 
-            setProgress(Math.round(((i + 1) / totalItems) * 100));
-        }
+            // Show result
+            if (errorCount === 0) {
+                message.success(`${successCount} menü başarıyla kopyalandı${skipCount > 0 ? `, ${skipCount} menü atlandı` : ''}`);
+            } else {
+                message.warning(`${successCount} kopyalandı, ${skipCount} atlandı, ${errorCount} hata oluştu`);
+            }
 
-        if (successCount > 0) {
-            message.success(`${successCount} menü öğesi başarıyla kopyalandı`);
             onCopyComplete?.();
+            handleClose();
+        } catch (error) {
+            console.error('Kopyalama işlemi sırasında hata:', error);
+            message.error('Kopyalama işlemi başarısız');
+        } finally {
+            setLoading(false);
         }
-
-        if (errorCount > 0) {
-            message.warning(`${errorCount} menü öğesi kopyalanamadı`);
-        }
-
-        handleClose();
     };
 
-    // Go back to select step
-    const handleBack = () => {
-        setPreviewData(null);
-        setStep('select');
+    // Disable past months for target
+    const disabledTargetDate = (current) => {
+        const sourceMonth = form.getFieldValue('sourceMonth');
+        if (sourceMonth && current) {
+            return current.isSame(sourceMonth, 'month');
+        }
+        return false;
     };
 
     return (
@@ -169,13 +193,14 @@ const MenuCopyModule = ({ visible, onClose, onCopyComplete }) => {
             title={
                 <Space>
                     <CopyOutlined />
-                    <span>Menü Kopyalama</span>
+                    <span>Menü Kopyala</span>
                 </Space>
             }
             open={visible}
             onCancel={handleClose}
             footer={null}
-            width={600}
+            width={500}
+            destroyOnClose
         >
             {step === 'select' && (
                 <Form
@@ -187,6 +212,14 @@ const MenuCopyModule = ({ visible, onClose, onCopyComplete }) => {
                         overwriteExisting: false
                     }}
                 >
+                    <Alert
+                        message="Menü Kopyalama"
+                        description="Kaynak aydaki menüleri hedef aya kopyalayabilirsiniz. Aynı günlere denk gelen menüler kopyalanacaktır."
+                        type="info"
+                        showIcon
+                        style={{ marginBottom: 24 }}
+                    />
+
                     <Form.Item
                         name="sourceMonth"
                         label="Kaynak Ay"
@@ -195,10 +228,14 @@ const MenuCopyModule = ({ visible, onClose, onCopyComplete }) => {
                         <DatePicker
                             picker="month"
                             style={{ width: '100%' }}
-                            placeholder="Kopyalanacak menülerin bulunduğu ay"
+                            placeholder="Kopyalanacak ay"
                             format="MMMM YYYY"
                         />
                     </Form.Item>
+
+                    <div style={{ textAlign: 'center', margin: '16px 0' }}>
+                        <SwapRightOutlined style={{ fontSize: 24, color: '#1890ff' }} />
+                    </div>
 
                     <Form.Item
                         name="targetMonth"
@@ -208,23 +245,24 @@ const MenuCopyModule = ({ visible, onClose, onCopyComplete }) => {
                         <DatePicker
                             picker="month"
                             style={{ width: '100%' }}
-                            placeholder="Menülerin kopyalanacağı ay"
+                            placeholder="Kopyalanacağı ay"
                             format="MMMM YYYY"
+                            disabledDate={disabledTargetDate}
                         />
                     </Form.Item>
 
-                    <Divider>Kopyalanacak Öğünler</Divider>
-
-                    <Space size="large">
-                        <Form.Item name="copyLunch" valuePropName="checked" noStyle>
-                            <Checkbox>Öğle Yemeği</Checkbox>
-                        </Form.Item>
-                        <Form.Item name="copyDinner" valuePropName="checked" noStyle>
-                            <Checkbox>Akşam Yemeği</Checkbox>
-                        </Form.Item>
-                    </Space>
-
                     <Divider />
+
+                    <Form.Item label="Kopyalanacak Öğünler">
+                        <Space direction="vertical">
+                            <Form.Item name="copyLunch" valuePropName="checked" noStyle>
+                                <Checkbox>🍽️ Öğle Yemeği</Checkbox>
+                            </Form.Item>
+                            <Form.Item name="copyDinner" valuePropName="checked" noStyle>
+                                <Checkbox>🌙 Akşam Yemeği</Checkbox>
+                            </Form.Item>
+                        </Space>
+                    </Form.Item>
 
                     <Form.Item name="overwriteExisting" valuePropName="checked">
                         <Checkbox>
@@ -234,61 +272,67 @@ const MenuCopyModule = ({ visible, onClose, onCopyComplete }) => {
                         </Checkbox>
                     </Form.Item>
 
-                    <Form.Item style={{ marginBottom: 0, marginTop: 24 }}>
-                        <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+                    <div style={{ textAlign: 'right', marginTop: 24 }}>
+                        <Space>
                             <Button onClick={handleClose}>İptal</Button>
                             <Button type="primary" onClick={handlePreview} loading={loading}>
                                 Önizle
                             </Button>
                         </Space>
-                    </Form.Item>
+                    </div>
                 </Form>
             )}
 
             {step === 'preview' && previewData && (
                 <div>
                     <Alert
-                        type="info"
                         message="Kopyalama Özeti"
                         description={
                             <div>
-                                <p>
-                                    <strong>{previewData.sourceMonth}</strong> ayından{' '}
-                                    <SwapRightOutlined />{' '}
-                                    <strong>{previewData.targetMonth}</strong> ayına kopyalanacak
-                                </p>
-                                <p>Kopyalanacak menü sayısı: <strong>{previewData.sourceMenuCount}</strong></p>
-                                <p>
-                                    Öğünler:{' '}
-                                    {previewData.copyLunch && <Text code>Öğle</Text>}
-                                    {previewData.copyLunch && previewData.copyDinner && ' + '}
-                                    {previewData.copyDinner && <Text code>Akşam</Text>}
-                                </p>
-                                {previewData.targetExistingCount > 0 && (
-                                    <p>
-                                        <WarningOutlined style={{ color: '#faad14' }} />{' '}
-                                        Hedef ayda {previewData.targetExistingCount} mevcut menü var
-                                    </p>
-                                )}
+                                <p><strong>Kaynak:</strong> {previewData.sourceMonth} ({previewData.sourceCount} menü)</p>
+                                <p><strong>Hedef:</strong> {previewData.targetMonth} ({previewData.targetExistingCount} mevcut menü)</p>
+                                <p><strong>Öğünler:</strong> {[
+                                    previewData.copyLunch && 'Öğle',
+                                    previewData.copyDinner && 'Akşam'
+                                ].filter(Boolean).join(', ')}</p>
+                                <p><strong>Üzerine Yazma:</strong> {previewData.overwriteExisting ? 'Evet' : 'Hayır'}</p>
                             </div>
                         }
+                        type="info"
+                        showIcon
                         style={{ marginBottom: 24 }}
                     />
 
-                    <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
-                        <Button onClick={handleBack}>Geri</Button>
-                        <Button type="primary" onClick={handleCopy}>
-                            Kopyalamayı Başlat
-                        </Button>
-                    </Space>
+                    {previewData.targetExistingCount > 0 && !previewData.overwriteExisting && (
+                        <Alert
+                            message="Uyarı"
+                            description={`Hedef ayda ${previewData.targetExistingCount} mevcut menü var. Aynı gün ve öğündeki menüler atlanacaktır.`}
+                            type="warning"
+                            showIcon
+                            style={{ marginBottom: 24 }}
+                        />
+                    )}
+
+                    <div style={{ textAlign: 'right' }}>
+                        <Space>
+                            <Button onClick={() => setStep('select')}>Geri</Button>
+                            <Button type="primary" onClick={handleCopy} loading={loading}>
+                                Kopyalamayı Başlat
+                            </Button>
+                        </Space>
+                    </div>
                 </div>
             )}
 
             {step === 'copying' && (
-                <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Title level={4}>Menüler Kopyalanıyor...</Title>
-                    <Progress percent={progress} status="active" />
-                    <Text type="secondary">Lütfen bekleyin, bu işlem biraz zaman alabilir.</Text>
+                <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                    <Title level={4}>Kopyalanıyor...</Title>
+                    <Progress
+                        percent={progress}
+                        status="active"
+                        style={{ marginBottom: 24 }}
+                    />
+                    <Text type="secondary">Lütfen bekleyin, menüler kopyalanıyor.</Text>
                 </div>
             )}
         </Modal>
