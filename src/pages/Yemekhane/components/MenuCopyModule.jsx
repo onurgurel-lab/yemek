@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal, Form, DatePicker, Checkbox, Button, Space, Typography, Alert, Progress, message, Divider } from 'antd';
 import { CopyOutlined, SwapRightOutlined, WarningOutlined } from '@ant-design/icons';
-import { mealMenuService } from '@/services/mealMenuService';
+import mealMenuService from '@/services/mealMenuService';
 import { MEAL_TIMES, MONTH_NAMES } from '@/constants/mealMenuApi';
 import dayjs from 'dayjs';
 import 'dayjs/locale/tr';

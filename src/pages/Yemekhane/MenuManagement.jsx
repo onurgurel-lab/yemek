@@ -3,6 +3,7 @@ import { Card, Table, Button, Modal, Form, Input, Select, DatePicker, InputNumbe
 import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRoles } from '@/hooks/useUserRoles';
 import {
     fetchMenuByDate,
     createMenuItem,
@@ -14,7 +15,6 @@ import {
     selectLoading,
     selectSubmitting
 } from '@/store/slices/yemekhaneSlice';
-import { canManageMenu } from '@/routes/yemekhaneRoutes';
 import { MEAL_TIMES, MEAL_TIME_LABELS, MEAL_CATEGORIES, getCategoryColor } from '@/constants/mealMenuApi';
 import MenuCopyModule from './components/MenuCopyModule';
 import BulkActions from './components/BulkActions';
@@ -28,6 +28,7 @@ const { Title, Text } = Typography;
 const MenuManagement = () => {
     const dispatch = useDispatch();
     const { user } = useAuth();
+    const { canManageMenu } = useUserRoles();
 
     // Redux state
     const menuData = useSelector(selectMenuData);
@@ -43,51 +44,53 @@ const MenuManagement = () => {
     const [showCopyModule, setShowCopyModule] = useState(false);
     const [form] = Form.useForm();
 
-    // Check permissions
-    const hasPermission = canManageMenu(user);
+    // Check permissions - useUserRoles hook'undan alınan canManageMenu kullanılıyor
+    const hasPermission = canManageMenu;
 
     // Initialize
     useEffect(() => {
-        const today = dayjs().add(1, 'day').format('YYYY-MM-DD'); // Default to tomorrow
+        const today = dayjs().add(1, 'day').format('YYYY-MM-DD'); // Default: yarın
         dispatch(setSelectedDate(today));
+        dispatch(fetchMenuByDate(today));
     }, [dispatch]);
 
-    // Load menu when date or meal time changes
-    useEffect(() => {
-        if (selectedDate) {
-            dispatch(fetchMenuByDate(selectedDate));
-        }
-    }, [selectedDate, dispatch]);
-
-    // Filter menu by selected meal time
-    const filteredMenu = menuData.filter(item => item.mealTime === selectedMealTime);
+    // Filter menu by meal time
+    const filteredMenu = React.useMemo(() => {
+        if (!Array.isArray(menuData)) return [];
+        return menuData.filter(item => item.mealTime === selectedMealTime);
+    }, [menuData, selectedMealTime]);
 
     // Check if editing is allowed (only future dates)
     const isEditingAllowed = useCallback(() => {
         if (!selectedDate) return false;
-        const selected = dayjs(selectedDate).startOf('day');
         const today = dayjs().startOf('day');
-        return selected.isAfter(today);
+        const selected = dayjs(selectedDate).startOf('day');
+        return selected.isAfter(today) || selected.isSame(today);
     }, [selectedDate]);
+
+    // Disabled dates (past dates)
+    const disabledDate = (current) => {
+        return current && current < dayjs().startOf('day');
+    };
 
     // Handle date change
     const handleDateChange = (date) => {
         if (date) {
-            dispatch(setSelectedDate(date.format('YYYY-MM-DD')));
+            const dateStr = date.format('YYYY-MM-DD');
+            dispatch(setSelectedDate(dateStr));
+            dispatch(fetchMenuByDate(dateStr));
+            setSelectedRows([]);
         }
     };
 
-    // Disable past dates
-    const disabledDate = (current) => {
-        return current && current <= dayjs().startOf('day');
+    // Handle meal time change
+    const handleMealTimeChange = (mealTime) => {
+        setSelectedMealTime(mealTime);
+        setSelectedRows([]);
     };
 
     // Open add modal
     const openAddModal = () => {
-        if (!isEditingAllowed()) {
-            message.warning('Geçmiş veya bugünün menüsü düzenlenemez');
-            return;
-        }
         setEditingItem(null);
         form.resetFields();
         form.setFieldsValue({
@@ -98,18 +101,14 @@ const MenuManagement = () => {
     };
 
     // Open edit modal
-    const startEdit = (item) => {
-        if (!isEditingAllowed()) {
-            message.warning('Geçmiş veya bugünün menüsü düzenlenemez');
-            return;
-        }
-        setEditingItem(item);
+    const openEditModal = (record) => {
+        setEditingItem(record);
         form.setFieldsValue({
-            foodName: item.foodName,
-            category: item.category,
-            calorie: item.calorie,
-            menuDate: dayjs(item.menuDate),
-            mealTime: item.mealTime
+            foodName: record.foodName,
+            category: record.category,
+            calorie: record.calorie,
+            menuDate: dayjs(record.menuDate),
+            mealTime: record.mealTime
         });
         setModalVisible(true);
     };
@@ -118,94 +117,73 @@ const MenuManagement = () => {
     const handleSubmit = async () => {
         try {
             const values = await form.validateFields();
-
-            const menuItemData = {
-                foodName: values.foodName,
-                category: values.category,
-                calorie: values.calorie || 0,
-                menuDate: values.menuDate.format('YYYY-MM-DD'),
-                mealTime: values.mealTime
+            const menuData = {
+                ...values,
+                menuDate: values.menuDate.format('YYYY-MM-DD')
             };
 
             if (editingItem) {
-                await dispatch(updateMenuItem({ id: editingItem.id, data: menuItemData })).unwrap();
+                await dispatch(updateMenuItem({ id: editingItem.id, ...menuData })).unwrap();
                 message.success('Menü öğesi güncellendi');
             } else {
-                await dispatch(createMenuItem(menuItemData)).unwrap();
+                await dispatch(createMenuItem(menuData)).unwrap();
                 message.success('Menü öğesi eklendi');
             }
 
             setModalVisible(false);
-            form.resetFields();
             dispatch(fetchMenuByDate(selectedDate));
         } catch (error) {
-            console.error('Kaydetme hatası:', error);
-            message.error('İşlem başarısız');
+            message.error(error?.message || 'İşlem başarısız');
         }
     };
 
     // Handle delete
     const handleDelete = async (id) => {
-        if (!isEditingAllowed()) {
-            message.warning('Geçmiş veya bugünün menüsü düzenlenemez');
-            return;
-        }
-
         try {
             await dispatch(deleteMenuItem(id)).unwrap();
             message.success('Menü öğesi silindi');
             dispatch(fetchMenuByDate(selectedDate));
         } catch (error) {
-            console.error('Silme hatası:', error);
-            message.error('Silme işlemi başarısız');
+            message.error(error?.message || 'Silme işlemi başarısız');
         }
     };
 
     // Handle bulk delete
-    const handleBulkDelete = async (items) => {
-        if (!isEditingAllowed()) {
-            message.warning('Geçmiş veya bugünün menüsü düzenlenemez');
-            return;
-        }
-
+    const handleBulkDelete = async () => {
         try {
-            for (const item of items) {
+            for (const item of selectedRows) {
                 await dispatch(deleteMenuItem(item.id)).unwrap();
             }
-            message.success(`${items.length} öğe silindi`);
+            message.success(`${selectedRows.length} öğe silindi`);
             setSelectedRows([]);
             dispatch(fetchMenuByDate(selectedDate));
         } catch (error) {
-            console.error('Toplu silme hatası:', error);
             message.error('Toplu silme işlemi başarısız');
         }
     };
 
     // Handle bulk edit
-    const handleBulkEdit = async (items, changes) => {
-        if (!isEditingAllowed()) {
-            message.warning('Geçmiş veya bugünün menüsü düzenlenemez');
-            return;
-        }
-
+    const handleBulkEdit = async (field, value) => {
         try {
-            for (const item of items) {
-                const updatedData = { ...item, ...changes };
-                await dispatch(updateMenuItem({ id: item.id, data: updatedData })).unwrap();
+            for (const item of selectedRows) {
+                await dispatch(updateMenuItem({
+                    id: item.id,
+                    ...item,
+                    [field]: value
+                })).unwrap();
             }
-            message.success(`${items.length} öğe güncellendi`);
+            message.success(`${selectedRows.length} öğe güncellendi`);
             setSelectedRows([]);
             dispatch(fetchMenuByDate(selectedDate));
         } catch (error) {
-            console.error('Toplu düzenleme hatası:', error);
-            message.error('Toplu düzenleme işlemi başarısız');
+            message.error('Toplu güncelleme işlemi başarısız');
         }
     };
 
-    // Row selection config
+    // Row selection
     const rowSelection = {
         selectedRowKeys: selectedRows.map(r => r.id),
-        onChange: (_, rows) => setSelectedRows(rows)
+        onChange: (_, rows) => setSelectedRows(rows),
     };
 
     // Table columns
@@ -214,7 +192,7 @@ const MenuManagement = () => {
             title: 'Yemek Adı',
             dataIndex: 'foodName',
             key: 'foodName',
-            sorter: (a, b) => a.foodName.localeCompare(b.foodName)
+            sorter: (a, b) => a.foodName.localeCompare(b.foodName),
         },
         {
             title: 'Kategori',
@@ -223,15 +201,15 @@ const MenuManagement = () => {
             render: (category) => (
                 <Tag color={getCategoryColor(category)}>{category}</Tag>
             ),
-            filters: MEAL_CATEGORIES.map(c => ({ text: c.label, value: c.label })),
-            onFilter: (value, record) => record.category === value
+            filters: MEAL_CATEGORIES.map(cat => ({ text: cat.label, value: cat.label })),
+            onFilter: (value, record) => record.category === value,
         },
         {
             title: 'Kalori',
             dataIndex: 'calorie',
             key: 'calorie',
-            render: (calorie) => calorie ? `${calorie} kcal` : '-',
-            sorter: (a, b) => (a.calorie || 0) - (b.calorie || 0)
+            render: (cal) => cal ? `${cal} kcal` : '-',
+            sorter: (a, b) => (a.calorie || 0) - (b.calorie || 0),
         },
         {
             title: 'İşlemler',
@@ -240,98 +218,98 @@ const MenuManagement = () => {
             render: (_, record) => (
                 <Space>
                     <Button
+                        type="text"
                         icon={<EditOutlined />}
-                        size="small"
-                        onClick={() => startEdit(record)}
+                        onClick={() => openEditModal(record)}
                         disabled={!isEditingAllowed()}
                     />
                     <Popconfirm
-                        title="Bu öğeyi silmek istediğinize emin misiniz?"
+                        title="Silmek istediğinize emin misiniz?"
                         onConfirm={() => handleDelete(record.id)}
                         okText="Evet"
                         cancelText="Hayır"
                         disabled={!isEditingAllowed()}
                     >
                         <Button
-                            icon={<DeleteOutlined />}
-                            size="small"
+                            type="text"
                             danger
+                            icon={<DeleteOutlined />}
                             disabled={!isEditingAllowed()}
                         />
                     </Popconfirm>
                 </Space>
-            )
-        }
+            ),
+        },
     ];
 
+    // Permission check
     if (!hasPermission) {
         return (
-            <div style={{ padding: 24 }}>
+            <Card>
                 <Alert
                     message="Yetkisiz Erişim"
                     description="Bu sayfayı görüntüleme yetkiniz bulunmamaktadır."
                     type="error"
                     showIcon
                 />
-            </div>
+            </Card>
         );
     }
 
     return (
-        <div style={{ padding: 24 }}>
-            <Card>
-                <div style={{ marginBottom: 24 }}>
-                    <Title level={3}>Menü Yönetimi</Title>
-                    <Text type="secondary">Yemek menüsünü ekleyin, düzenleyin veya silin.</Text>
-                </div>
-
+        <div className="menu-management">
+            <Card
+                title={
+                    <Space>
+                        <Title level={4} style={{ margin: 0 }}>Menü Yönetimi</Title>
+                        <Button
+                            icon={<CopyOutlined />}
+                            onClick={() => setShowCopyModule(true)}
+                        >
+                            Menü Kopyala
+                        </Button>
+                    </Space>
+                }
+                extra={
+                    <Button
+                        icon={<ReloadOutlined />}
+                        onClick={() => dispatch(fetchMenuByDate(selectedDate))}
+                        loading={loading}
+                    >
+                        Yenile
+                    </Button>
+                }
+            >
                 {/* Filters */}
-                <Row gutter={16} style={{ marginBottom: 16 }}>
+                <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
                     <Col xs={24} sm={12} md={8}>
-                        <Text strong style={{ display: 'block', marginBottom: 8 }}>Tarih:</Text>
+                        <Text strong>Tarih:</Text>
                         <DatePicker
                             value={selectedDate ? dayjs(selectedDate) : null}
                             onChange={handleDateChange}
-                            disabledDate={disabledDate}
-                            style={{ width: '100%' }}
                             format="DD MMMM YYYY"
+                            style={{ width: '100%', marginTop: 4 }}
+                            disabledDate={disabledDate}
                         />
                     </Col>
                     <Col xs={24} sm={12} md={8}>
-                        <Text strong style={{ display: 'block', marginBottom: 8 }}>Öğün:</Text>
+                        <Text strong>Öğün:</Text>
                         <Select
                             value={selectedMealTime}
-                            onChange={setSelectedMealTime}
-                            style={{ width: '100%' }}
+                            onChange={handleMealTimeChange}
+                            style={{ width: '100%', marginTop: 4 }}
                             options={[
                                 { value: MEAL_TIMES.LUNCH, label: MEAL_TIME_LABELS[MEAL_TIMES.LUNCH] },
                                 { value: MEAL_TIMES.DINNER, label: MEAL_TIME_LABELS[MEAL_TIMES.DINNER] }
                             ]}
                         />
                     </Col>
-                    <Col xs={24} sm={24} md={8} style={{ display: 'flex', alignItems: 'flex-end' }}>
-                        <Space>
-                            <Button
-                                icon={<ReloadOutlined />}
-                                onClick={() => dispatch(fetchMenuByDate(selectedDate))}
-                            >
-                                Yenile
-                            </Button>
-                            <Button
-                                icon={<CopyOutlined />}
-                                onClick={() => setShowCopyModule(true)}
-                            >
-                                Menü Kopyala
-                            </Button>
-                        </Space>
-                    </Col>
                 </Row>
 
                 {/* Warning for past dates */}
                 {!isEditingAllowed() && (
                     <Alert
-                        message="Düzenleme Kısıtlaması"
-                        description="Bugün veya geçmiş tarihlerin menüsü düzenlenemez. Lütfen ileri bir tarih seçin."
+                        message="Geçmiş tarihlerde düzenleme yapılamaz. Lütfen ileri bir tarih seçin."
                         type="warning"
                         showIcon
                         style={{ marginBottom: 16 }}

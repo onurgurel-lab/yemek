@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { Card, Upload, Button, Alert, Progress, Table, Typography, Space, Tag, Divider, List, message } from 'antd';
 import { InboxOutlined, DownloadOutlined, FileExcelOutlined, CheckCircleOutlined, CloseCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { useAuth } from '@/hooks/useAuth';
-import { canManageMenu } from '@/routes/yemekhaneRoutes';
-import { excelService } from '@/services/excelService';
+import { useUserRoles } from '@/hooks/useUserRoles';
+import excelService from '@/services/excelService';
 import { MEAL_CATEGORIES, MEAL_TIME_LABELS, MEAL_TIMES } from '@/constants/mealMenuApi';
 
 const { Dragger } = Upload;
@@ -11,6 +11,7 @@ const { Title, Text, Paragraph } = Typography;
 
 const ExcelUpload = () => {
     const { user } = useAuth();
+    const { canManageMenu } = useUserRoles();
 
     // State
     const [selectedFile, setSelectedFile] = useState(null);
@@ -19,8 +20,8 @@ const ExcelUpload = () => {
     const [uploadResult, setUploadResult] = useState(null);
     const [validationError, setValidationError] = useState(null);
 
-    // Check permissions
-    const hasPermission = canManageMenu(user);
+    // Check permissions - useUserRoles hook'undan alınan canManageMenu kullanılıyor
+    const hasPermission = canManageMenu;
 
     // Template info
     const templateInfo = excelService.getTemplateInfo();
@@ -69,91 +70,128 @@ const ExcelUpload = () => {
             } else if (formattedResult.successCount > 0) {
                 message.warning(`${formattedResult.successCount} öğe eklendi, ${formattedResult.errorCount} hata oluştu`);
             } else {
-                message.error('İçe aktarma başarısız');
+                message.error('Yükleme başarısız');
             }
         } catch (error) {
-            console.error('Upload error:', error);
+            message.error(error?.message || 'Yükleme sırasında bir hata oluştu');
             setUploadResult({
                 success: false,
+                message: error?.message || 'Yükleme başarısız',
                 successCount: 0,
                 errorCount: 1,
-                errors: [error.message || 'Beklenmeyen bir hata oluştu']
+                errors: [error?.message || 'Bilinmeyen hata']
             });
         } finally {
             setUploading(false);
         }
     };
 
-    // Clear selected file
-    const clearFile = () => {
+    // Handle template download
+    const handleDownloadTemplate = async () => {
+        try {
+            await excelService.downloadTemplate();
+            message.success('Şablon indiriliyor...');
+        } catch (error) {
+            message.error('Şablon indirilemedi');
+        }
+    };
+
+    // Clear selection
+    const handleClear = () => {
         setSelectedFile(null);
         setUploadResult(null);
         setValidationError(null);
         setUploadProgress(0);
     };
 
-    // Download template
-    const handleDownloadTemplate = async () => {
-        try {
-            await excelService.downloadTemplate();
-            message.success('Şablon indirildi');
-        } catch (error) {
-            console.error('Template download error:', error);
-            message.error('Şablon indirilemedi');
-        }
-    };
-
-    // Template columns table
+    // Template columns info
     const templateColumns = [
-        { title: 'Sütun Adı', dataIndex: 'name', key: 'name' },
+        { title: 'Kolon', dataIndex: 'column', key: 'column' },
         { title: 'Açıklama', dataIndex: 'description', key: 'description' },
-        {
-            title: 'Zorunlu',
-            dataIndex: 'required',
-            key: 'required',
-            render: (required) => required ? (
-                <Tag color="red">Zorunlu</Tag>
-            ) : (
-                <Tag color="default">Opsiyonel</Tag>
-            )
-        }
+        { title: 'Zorunlu', dataIndex: 'required', key: 'required', render: (val) => val ? <Tag color="red">Evet</Tag> : <Tag>Hayır</Tag> },
+        { title: 'Örnek', dataIndex: 'example', key: 'example' },
     ];
 
-    // Sample data columns
-    const sampleColumns = [
-        { title: 'Yemek Adı', dataIndex: 'foodName', key: 'foodName' },
-        { title: 'Kategori', dataIndex: 'category', key: 'category' },
-        { title: 'Kalori', dataIndex: 'calorie', key: 'calorie' },
-        { title: 'Tarih', dataIndex: 'menuDate', key: 'menuDate' },
-        { title: 'Öğün', dataIndex: 'mealTime', key: 'mealTime' }
+    const templateData = [
+        { key: '1', column: 'Tarih', description: 'Menü tarihi (GG.AA.YYYY)', required: true, example: '25.12.2024' },
+        { key: '2', column: 'Öğün', description: 'Öğle veya Akşam', required: true, example: 'Öğle' },
+        { key: '3', column: 'Yemek Adı', description: 'Yemeğin adı', required: true, example: 'Mercimek Çorbası' },
+        { key: '4', column: 'Kategori', description: 'Yemek kategorisi', required: true, example: 'ÇORBA' },
+        { key: '5', column: 'Kalori', description: 'Kalori değeri (kcal)', required: false, example: '150' },
     ];
 
+    // Permission check
     if (!hasPermission) {
         return (
-            <div style={{ padding: 24 }}>
+            <Card>
                 <Alert
                     message="Yetkisiz Erişim"
                     description="Bu sayfayı görüntüleme yetkiniz bulunmamaktadır."
                     type="error"
                     showIcon
                 />
-            </div>
+            </Card>
         );
     }
 
     return (
-        <div style={{ padding: 24 }}>
-            <Card>
-                <Title level={3}>
-                    <FileExcelOutlined style={{ marginRight: 8 }} />
-                    Excel ile Menü Yükleme
-                </Title>
-                <Paragraph type="secondary">
-                    Excel dosyası kullanarak toplu menü ekleyebilirsiniz.
-                </Paragraph>
+        <div className="excel-upload">
+            <Card title={<Title level={4}>Excel ile Menü Yükle</Title>}>
+                {/* Template Info */}
+                <Alert
+                    message="Excel Şablonu Hakkında"
+                    description={
+                        <div>
+                            <Paragraph>
+                                Menü verilerini toplu olarak yüklemek için Excel şablonunu kullanabilirsiniz.
+                                Şablonu indirip doldurduktan sonra bu sayfadan yükleyebilirsiniz.
+                            </Paragraph>
+                            <Button
+                                type="primary"
+                                icon={<DownloadOutlined />}
+                                onClick={handleDownloadTemplate}
+                            >
+                                Şablonu İndir
+                            </Button>
+                        </div>
+                    }
+                    type="info"
+                    showIcon
+                    icon={<InfoCircleOutlined />}
+                    style={{ marginBottom: 24 }}
+                />
+
+                {/* Template Structure */}
+                <Card type="inner" title="Şablon Yapısı" style={{ marginBottom: 24 }}>
+                    <Table
+                        columns={templateColumns}
+                        dataSource={templateData}
+                        pagination={false}
+                        size="small"
+                    />
+
+                    <Divider />
+
+                    <Title level={5}>Geçerli Kategoriler:</Title>
+                    <Space wrap>
+                        {MEAL_CATEGORIES.map(cat => (
+                            <Tag key={cat.value} color={cat.color}>
+                                {cat.icon} {cat.label}
+                            </Tag>
+                        ))}
+                    </Space>
+
+                    <Divider />
+
+                    <Title level={5}>Geçerli Öğün Değerleri:</Title>
+                    <Space>
+                        <Tag color="blue">{MEAL_TIME_LABELS[MEAL_TIMES.LUNCH]}</Tag>
+                        <Tag color="orange">{MEAL_TIME_LABELS[MEAL_TIMES.DINNER]}</Tag>
+                    </Space>
+                </Card>
 
                 {/* Upload Area */}
-                <div style={{ marginBottom: 24 }}>
+                <Card type="inner" title="Dosya Yükle" style={{ marginBottom: 24 }}>
                     <Dragger
                         accept=".xlsx,.xls"
                         beforeUpload={handleFileSelect}
@@ -161,195 +199,118 @@ const ExcelUpload = () => {
                         disabled={uploading}
                     >
                         <p className="ant-upload-drag-icon">
-                            <InboxOutlined style={{ fontSize: 48, color: '#1890ff' }} />
+                            {selectedFile ? <FileExcelOutlined style={{ color: '#52c41a' }} /> : <InboxOutlined />}
                         </p>
                         <p className="ant-upload-text">
-                            Dosyayı sürükleyip bırakın veya tıklayarak seçin
+                            {selectedFile ? selectedFile.name : 'Excel dosyasını buraya sürükleyin veya tıklayın'}
                         </p>
                         <p className="ant-upload-hint">
-                            Sadece .xlsx ve .xls dosyaları desteklenir (Maks. 10MB)
+                            Desteklenen formatlar: .xlsx, .xls (Maksimum 5MB)
                         </p>
                     </Dragger>
-                </div>
 
-                {/* Selected File Info */}
-                {selectedFile && (
-                    <Alert
-                        message={
-                            <Space>
-                                <FileExcelOutlined />
-                                <span>{selectedFile.name}</span>
-                                <Text type="secondary">
-                                    ({(selectedFile.size / 1024).toFixed(1)} KB)
-                                </Text>
-                            </Space>
-                        }
-                        type="info"
-                        showIcon={false}
-                        closable
-                        onClose={clearFile}
-                        style={{ marginBottom: 16 }}
-                    />
-                )}
+                    {/* Validation Error */}
+                    {validationError && (
+                        <Alert
+                            message="Dosya Hatası"
+                            description={validationError}
+                            type="error"
+                            showIcon
+                            style={{ marginTop: 16 }}
+                        />
+                    )}
 
-                {/* Validation Error */}
-                {validationError && (
-                    <Alert
-                        message="Dosya Hatası"
-                        description={validationError}
-                        type="error"
-                        showIcon
-                        style={{ marginBottom: 16 }}
-                    />
-                )}
+                    {/* Upload Progress */}
+                    {uploading && (
+                        <div style={{ marginTop: 16 }}>
+                            <Progress percent={uploadProgress} status="active" />
+                            <Text type="secondary">Yükleniyor...</Text>
+                        </div>
+                    )}
 
-                {/* Upload Button */}
-                <Space style={{ marginBottom: 24 }}>
-                    <Button
-                        type="primary"
-                        onClick={handleUpload}
-                        loading={uploading}
-                        disabled={!selectedFile || validationError}
-                        icon={<FileExcelOutlined />}
-                    >
-                        Yükle ve İçe Aktar
-                    </Button>
-                    <Button
-                        onClick={handleDownloadTemplate}
-                        icon={<DownloadOutlined />}
-                    >
-                        Şablon İndir
-                    </Button>
-                </Space>
-
-                {/* Progress */}
-                {uploading && (
-                    <div style={{ marginBottom: 24 }}>
-                        <Progress percent={uploadProgress} status="active" />
-                        <Text type="secondary">Menüler içe aktarılıyor...</Text>
-                    </div>
-                )}
+                    {/* Action Buttons */}
+                    {selectedFile && !uploading && (
+                        <Space style={{ marginTop: 16 }}>
+                            <Button
+                                type="primary"
+                                onClick={handleUpload}
+                                loading={uploading}
+                            >
+                                Yükle
+                            </Button>
+                            <Button onClick={handleClear}>
+                                Temizle
+                            </Button>
+                        </Space>
+                    )}
+                </Card>
 
                 {/* Upload Result */}
                 {uploadResult && (
-                    <Alert
-                        message={uploadResult.success ? 'İçe Aktarma Başarılı' : 'İçe Aktarma Tamamlandı'}
-                        description={
-                            <div>
-                                <Space direction="vertical">
-                                    <Text>
-                                        <CheckCircleOutlined style={{ color: '#52c41a', marginRight: 8 }} />
-                                        Başarılı: {uploadResult.successCount} öğe
-                                    </Text>
-                                    {uploadResult.errorCount > 0 && (
-                                        <>
-                                            <Text>
-                                                <CloseCircleOutlined style={{ color: '#ff4d4f', marginRight: 8 }} />
-                                                Hatalı: {uploadResult.errorCount} öğe
-                                            </Text>
-                                            <div style={{ maxHeight: 150, overflow: 'auto', marginTop: 8 }}>
-                                                {uploadResult.errors.slice(0, 10).map((error, idx) => (
-                                                    <div key={idx} style={{ color: '#ff4d4f', fontSize: 12 }}>
-                                                        • {error}
-                                                    </div>
-                                                ))}
-                                                {uploadResult.errors.length > 10 && (
-                                                    <Text type="secondary">
-                                                        +{uploadResult.errors.length - 10} hata daha...
-                                                    </Text>
-                                                )}
-                                            </div>
-                                        </>
-                                    )}
-                                </Space>
-                            </div>
+                    <Card
+                        type="inner"
+                        title={
+                            <Space>
+                                {uploadResult.success ? (
+                                    <CheckCircleOutlined style={{ color: '#52c41a' }} />
+                                ) : (
+                                    <CloseCircleOutlined style={{ color: '#ff4d4f' }} />
+                                )}
+                                Yükleme Sonucu
+                            </Space>
                         }
-                        type={uploadResult.success ? 'success' : 'warning'}
-                        showIcon
-                        style={{ marginBottom: 24 }}
-                    />
-                )}
+                    >
+                        <Alert
+                            message={uploadResult.message}
+                            type={uploadResult.success ? 'success' : 'error'}
+                            showIcon
+                            style={{ marginBottom: 16 }}
+                        />
 
-                <Divider />
+                        <Space size="large">
+                            <Statistic
+                                title="Başarılı"
+                                value={uploadResult.successCount}
+                                valueStyle={{ color: '#52c41a' }}
+                            />
+                            <Statistic
+                                title="Hatalı"
+                                value={uploadResult.errorCount}
+                                valueStyle={{ color: '#ff4d4f' }}
+                            />
+                        </Space>
 
-                {/* Template Documentation */}
-                <Title level={4}>
-                    <InfoCircleOutlined style={{ marginRight: 8 }} />
-                    Şablon Formatı
-                </Title>
-
-                {/* Required Columns */}
-                <div style={{ marginBottom: 24 }}>
-                    <Text strong style={{ display: 'block', marginBottom: 8 }}>
-                        Gerekli Sütunlar:
-                    </Text>
-                    <Table
-                        dataSource={templateInfo.columns}
-                        columns={templateColumns}
-                        pagination={false}
-                        size="small"
-                        rowKey="name"
-                    />
-                </div>
-
-                {/* Valid Categories */}
-                <div style={{ marginBottom: 16 }}>
-                    <Text strong style={{ display: 'block', marginBottom: 8 }}>
-                        Geçerli Kategoriler:
-                    </Text>
-                    <Space wrap>
-                        {MEAL_CATEGORIES.map(cat => (
-                            <Tag key={cat.label} color={cat.color}>
-                                {cat.icon} {cat.label}
-                            </Tag>
-                        ))}
-                    </Space>
-                </div>
-
-                {/* Valid Meal Times */}
-                <div style={{ marginBottom: 24 }}>
-                    <Text strong style={{ display: 'block', marginBottom: 8 }}>
-                        Geçerli Öğün Değerleri:
-                    </Text>
-                    <Space>
-                        <Tag>Öğle veya {MEAL_TIMES.LUNCH}</Tag>
-                        <Tag>Akşam veya {MEAL_TIMES.DINNER}</Tag>
-                    </Space>
-                </div>
-
-                {/* Important Notes */}
-                <div style={{ marginBottom: 24 }}>
-                    <Text strong style={{ display: 'block', marginBottom: 8 }}>
-                        Önemli Notlar:
-                    </Text>
-                    <List
-                        size="small"
-                        dataSource={templateInfo.notes}
-                        renderItem={(item) => (
-                            <List.Item style={{ padding: '4px 0' }}>
-                                <Text type="secondary">• {item}</Text>
-                            </List.Item>
+                        {/* Error List */}
+                        {uploadResult.errors && uploadResult.errors.length > 0 && (
+                            <>
+                                <Divider />
+                                <Title level={5}>Hatalar:</Title>
+                                <List
+                                    size="small"
+                                    dataSource={uploadResult.errors}
+                                    renderItem={(error, index) => (
+                                        <List.Item>
+                                            <Text type="danger">
+                                                {index + 1}. {error}
+                                            </Text>
+                                        </List.Item>
+                                    )}
+                                />
+                            </>
                         )}
-                    />
-                </div>
-
-                {/* Sample Data */}
-                <div>
-                    <Text strong style={{ display: 'block', marginBottom: 8 }}>
-                        Örnek Veri:
-                    </Text>
-                    <Table
-                        dataSource={sampleData}
-                        columns={sampleColumns}
-                        pagination={false}
-                        size="small"
-                        rowKey={(record, index) => index}
-                        scroll={{ x: 'max-content' }}
-                    />
-                </div>
+                    </Card>
+                )}
             </Card>
         </div>
     );
 };
+
+// Statistic component helper
+const Statistic = ({ title, value, valueStyle }) => (
+    <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 14, color: '#666' }}>{title}</div>
+        <div style={{ fontSize: 24, fontWeight: 'bold', ...valueStyle }}>{value}</div>
+    </div>
+);
 
 export default ExcelUpload;

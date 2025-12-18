@@ -78,6 +78,9 @@ export const yemekhaneBreadcrumbs = {
 
 /**
  * Kullanıcının belirtilen role sahip olup olmadığını kontrol eder
+ * @param {Object} user - Kullanıcı objesi
+ * @param {string} role - Kontrol edilecek rol
+ * @returns {boolean}
  */
 export const hasRole = (user, role) => {
     if (!user || !user.roles) return false;
@@ -86,6 +89,9 @@ export const hasRole = (user, role) => {
 
 /**
  * Kullanıcının rotaya erişim yetkisi olup olmadığını kontrol eder
+ * @param {Object} user - Kullanıcı objesi
+ * @param {Array} requiredRoles - Gerekli roller
+ * @returns {boolean}
  */
 export const canAccessRoute = (user, requiredRoles) => {
     if (!user || !user.roles || !Array.isArray(requiredRoles)) {
@@ -95,10 +101,64 @@ export const canAccessRoute = (user, requiredRoles) => {
 };
 
 /**
+ * Kullanıcının menü yönetimi yetkisi olup olmadığını kontrol eder
+ * Admin veya YemekhaneAdmin rolü gerektirir
+ * @param {Object} user - Kullanıcı objesi
+ * @returns {boolean}
+ */
+export const canManageMenu = (user) => {
+    if (!user || !user.roles) return false;
+    return user.roles.includes(ADMIN) || user.roles.includes(YEMEKHANE_ADMIN);
+};
+
+/**
+ * Kullanıcının admin olup olmadığını kontrol eder
+ * @param {Object} user - Kullanıcı objesi
+ * @returns {boolean}
+ */
+export const isAdmin = (user) => {
+    if (!user || !user.roles) return false;
+    return user.roles.includes(ADMIN);
+};
+
+/**
+ * Kullanıcının yemekhane admin olup olmadığını kontrol eder
+ * @param {Object} user - Kullanıcı objesi
+ * @returns {boolean}
+ */
+export const isYemekhaneAdmin = (user) => {
+    if (!user || !user.roles) return false;
+    return user.roles.includes(YEMEKHANE_ADMIN);
+};
+
+/**
  * Menüde gösterilecek rotaları filtreler
+ * @param {Object} user - Kullanıcı objesi
+ * @returns {Array} Görüntülenebilir rotalar
  */
 export const getVisibleRoutes = (user) => {
     return yemekhaneRoutes.filter(route => {
         return route.showInMenu && canAccessRoute(user, route.roles);
     });
 };
+
+/**
+ * Admin rotalarını döndürür
+ * @returns {Array} Admin rotaları
+ */
+export const getAdminRoutes = () => {
+    return yemekhaneRoutes.filter(route => {
+        return route.roles.includes(ADMIN) || route.roles.includes(YEMEKHANE_ADMIN);
+    });
+};
+
+/**
+ * Belirli bir path için breadcrumb döndürür
+ * @param {string} path - Sayfa yolu
+ * @returns {Array} Breadcrumb dizisi
+ */
+export const getBreadcrumbs = (path) => {
+    return yemekhaneBreadcrumbs[path] || [];
+};
+
+export default yemekhaneRoutes;

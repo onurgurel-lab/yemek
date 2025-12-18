@@ -3,73 +3,96 @@
  */
 
 // API Endpoint Tanımları
+export const API_ENDPOINTS = {
+    IMPORT_EXCEL: '/api/mealmenu/importfromexcel',
+    GET_MENUS: '/api/mealmenu',
+    GET_MENU_BY_ID: '/api/mealmenu',
+    MENU_COMMENT: '/api/menucomment',
+    MENU_POINT: '/api/menupoint',
+    DAY_COMMENT: '/api/DayComment',
+    DAY_POINT: '/api/DayPoint',
+    // Raporlama endpoint'leri
+    REPORTS: {
+        GENERAL_STATS: '/api/Report/general-stats',
+        TODAY_AVERAGE: '/api/Report/today-average',
+        MEALS_BY_RATING: '/api/Report/meals-by-rating',
+        DAILY_AVERAGES: '/api/Report/daily-averages',
+        TODAY_COMMENTS: '/api/Report/today-comments',
+        COMMENTS_BY_DATE: '/api/Report/comments-by-date',
+        COMMENTS_BY_DATE_RANGE: '/api/Report/comments-by-date-range'
+    }
+};
+
+// Geriye uyumluluk için eski endpoint yapısı (YEMEKHANE_ENDPOINTS)
+// Mevcut servisler bu yapıyı kullanıyor olabilir
 export const YEMEKHANE_ENDPOINTS = {
     // Menu İşlemleri
     MENU: {
-        GET_ALL: '/MealMenu/GetAll',
-        GET_BY_ID: '/MealMenu/GetById',
-        GET_BY_DATE: '/MealMenu/GetByDate',
-        GET_BY_MONTH: '/MealMenu/GetByMonth',
-        GET_BY_DATE_RANGE: '/MealMenu/GetByDateRange',
-        CREATE: '/MealMenu/Create',
-        UPDATE: '/MealMenu/Update',
-        DELETE: '/MealMenu/Delete',
-        SEARCH: '/MealMenu/Search',
+        GET_ALL: API_ENDPOINTS.GET_MENUS,
+        GET_BY_ID: API_ENDPOINTS.GET_MENU_BY_ID,
+        GET_BY_DATE: API_ENDPOINTS.GET_MENUS,
+        GET_BY_MONTH: API_ENDPOINTS.GET_MENUS,
+        GET_BY_DATE_RANGE: API_ENDPOINTS.GET_MENUS,
+        CREATE: API_ENDPOINTS.GET_MENUS,
+        UPDATE: API_ENDPOINTS.GET_MENUS,
+        DELETE: API_ENDPOINTS.GET_MENUS,
+        SEARCH: API_ENDPOINTS.GET_MENUS,
     },
     // Yemek Puanlama
     MENU_POINT: {
-        GET_ALL: '/MealMenuPoint/GetAll',
-        GET_BY_MENU: '/MealMenuPoint/GetByMenuId',
-        GET_BY_USER: '/MealMenuPoint/GetByUser',
-        GET_AVERAGE: '/MealMenuPoint/GetAverage',
-        ADD: '/MealMenuPoint/Add',
-        UPDATE: '/MealMenuPoint/Update',
-        DELETE: '/MealMenuPoint/Delete',
+        GET_ALL: API_ENDPOINTS.MENU_POINT,
+        GET_BY_MENU: API_ENDPOINTS.MENU_POINT,
+        GET_BY_USER: API_ENDPOINTS.MENU_POINT,
+        GET_AVERAGE: API_ENDPOINTS.MENU_POINT,
+        ADD: API_ENDPOINTS.MENU_POINT,
+        UPDATE: API_ENDPOINTS.MENU_POINT,
+        DELETE: API_ENDPOINTS.MENU_POINT,
     },
     // Yemek Yorumları
     MENU_COMMENT: {
-        GET_ALL: '/MealMenuComment/GetAll',
-        GET_BY_MENU: '/MealMenuComment/GetByMenuId',
-        GET_BY_USER: '/MealMenuComment/GetByUser',
-        ADD: '/MealMenuComment/Add',
-        UPDATE: '/MealMenuComment/Update',
-        DELETE: '/MealMenuComment/Delete',
+        GET_ALL: API_ENDPOINTS.MENU_COMMENT,
+        GET_BY_MENU: API_ENDPOINTS.MENU_COMMENT,
+        GET_BY_USER: API_ENDPOINTS.MENU_COMMENT,
+        ADD: API_ENDPOINTS.MENU_COMMENT,
+        UPDATE: API_ENDPOINTS.MENU_COMMENT,
+        DELETE: API_ENDPOINTS.MENU_COMMENT,
     },
     // Gün Puanlama
     DAY_POINT: {
-        GET_ALL: '/MealDayPoint/GetAll',
-        GET_BY_USER: '/MealDayPoint/GetByUser',
-        GET_BY_DATE: '/MealDayPoint/GetByDate',
-        ADD: '/MealDayPoint/Add',
-        UPDATE: '/MealDayPoint/Update',
-        DELETE: '/MealDayPoint/Delete',
+        GET_ALL: API_ENDPOINTS.DAY_POINT,
+        GET_BY_USER: API_ENDPOINTS.DAY_POINT,
+        GET_BY_DATE: API_ENDPOINTS.DAY_POINT,
+        ADD: API_ENDPOINTS.DAY_POINT,
+        UPDATE: API_ENDPOINTS.DAY_POINT,
+        DELETE: API_ENDPOINTS.DAY_POINT,
     },
     // Gün Yorumları
     DAY_COMMENT: {
-        GET_ALL: '/MealDayComment/GetAll',
-        GET_BY_USER: '/MealDayComment/GetByUser',
-        GET_BY_DATE: '/MealDayComment/GetByDate',
-        ADD: '/MealDayComment/Add',
-        UPDATE: '/MealDayComment/Update',
-        DELETE: '/MealDayComment/Delete',
+        GET_ALL: API_ENDPOINTS.DAY_COMMENT,
+        GET_BY_USER: API_ENDPOINTS.DAY_COMMENT,
+        GET_BY_DATE: API_ENDPOINTS.DAY_COMMENT,
+        ADD: API_ENDPOINTS.DAY_COMMENT,
+        UPDATE: API_ENDPOINTS.DAY_COMMENT,
+        DELETE: API_ENDPOINTS.DAY_COMMENT,
     },
     // Raporlar
     REPORT: {
-        GENERAL_STATS: '/MealReport/GetGeneralStats',
-        TODAY_AVERAGE: '/MealReport/GetTodayAverage',
-        DAILY_AVERAGES: '/MealReport/GetDailyAverages',
-        MEALS_BY_RATING: '/MealReport/GetMealsByRating',
-        TODAY_COMMENTS: '/MealReport/GetTodayComments',
-        COMMENTS_BY_DATE: '/MealReport/GetCommentsByDate',
-        WEEKLY_SUMMARY: '/MealReport/GetWeeklySummary',
-        MONTHLY_SUMMARY: '/MealReport/GetMonthlySummary',
-        DASHBOARD: '/MealReport/GetDashboardSummary',
+        GENERAL_STATS: API_ENDPOINTS.REPORTS.GENERAL_STATS,
+        TODAY_AVERAGE: API_ENDPOINTS.REPORTS.TODAY_AVERAGE,
+        DAILY_AVERAGES: API_ENDPOINTS.REPORTS.DAILY_AVERAGES,
+        MEALS_BY_RATING: API_ENDPOINTS.REPORTS.MEALS_BY_RATING,
+        TODAY_COMMENTS: API_ENDPOINTS.REPORTS.TODAY_COMMENTS,
+        COMMENTS_BY_DATE: API_ENDPOINTS.REPORTS.COMMENTS_BY_DATE,
+        COMMENTS_BY_DATE_RANGE: API_ENDPOINTS.REPORTS.COMMENTS_BY_DATE_RANGE,
+        WEEKLY_SUMMARY: API_ENDPOINTS.REPORTS.GENERAL_STATS,
+        MONTHLY_SUMMARY: API_ENDPOINTS.REPORTS.GENERAL_STATS,
+        DASHBOARD: API_ENDPOINTS.REPORTS.GENERAL_STATS,
     },
     // Excel İşlemleri
     EXCEL: {
-        IMPORT: '/MealExcel/Import',
-        EXPORT: '/MealExcel/Export',
-        TEMPLATE: '/MealExcel/GetTemplate',
+        IMPORT: API_ENDPOINTS.IMPORT_EXCEL,
+        EXPORT: API_ENDPOINTS.IMPORT_EXCEL,
+        TEMPLATE: API_ENDPOINTS.IMPORT_EXCEL,
     },
 };
 
@@ -193,4 +216,100 @@ export const isToday = (date) => {
 export const getDefaultMealTab = () => {
     const hour = new Date().getHours();
     return hour < 15 ? MEAL_TIMES.LUNCH : MEAL_TIMES.DINNER;
+};
+
+/**
+ * Puan açıklamasını döndürür
+ */
+export const getRatingDescription = (rating) => {
+    return RATING_DESCRIPTIONS[rating] || '';
+};
+
+/**
+ * Ay adını döndürür
+ */
+export const getMonthName = (monthIndex) => {
+    return MONTH_NAMES[monthIndex] || '';
+};
+
+/**
+ * Gün adını döndürür (kısa)
+ */
+export const getDayName = (dayIndex) => {
+    return DAY_NAMES[dayIndex] || '';
+};
+
+/**
+ * Gün adını döndürür (tam)
+ */
+export const getDayNameFull = (dayIndex) => {
+    return DAY_NAMES_FULL[dayIndex] || '';
+};
+
+/**
+ * Tarihten gün adını döndürür
+ */
+export const getDayNameFromDate = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    const dayIndex = d.getDay();
+    // JavaScript'te Pazar = 0, biz Pazartesi = 0 istiyoruz
+    const adjustedIndex = dayIndex === 0 ? 6 : dayIndex - 1;
+    return DAY_NAMES_FULL[adjustedIndex];
+};
+
+/**
+ * API URL'ini oluşturur
+ */
+export const buildApiUrl = (endpoint, params = {}) => {
+    let url = endpoint;
+    const queryParams = new URLSearchParams();
+
+    Object.keys(params).forEach((key) => {
+        if (params[key] !== undefined && params[key] !== null) {
+            queryParams.append(key, params[key]);
+        }
+    });
+
+    const queryString = queryParams.toString();
+    if (queryString) {
+        url += `?${queryString}`;
+    }
+
+    return url;
+};
+
+/**
+ * Menü endpoint'ini ID ile oluşturur
+ */
+export const getMenuByIdUrl = (id) => {
+    return `${API_ENDPOINTS.GET_MENU_BY_ID}/${id}`;
+};
+
+/**
+ * Yorum endpoint'ini ID ile oluşturur
+ */
+export const getCommentByIdUrl = (id) => {
+    return `${API_ENDPOINTS.MENU_COMMENT}/${id}`;
+};
+
+/**
+ * Puan endpoint'ini ID ile oluşturur
+ */
+export const getPointByIdUrl = (id) => {
+    return `${API_ENDPOINTS.MENU_POINT}/${id}`;
+};
+
+/**
+ * Gün yorumu endpoint'ini ID ile oluşturur
+ */
+export const getDayCommentByIdUrl = (id) => {
+    return `${API_ENDPOINTS.DAY_COMMENT}/${id}`;
+};
+
+/**
+ * Gün puanı endpoint'ini ID ile oluşturur
+ */
+export const getDayPointByIdUrl = (id) => {
+    return `${API_ENDPOINTS.DAY_POINT}/${id}`;
 };
