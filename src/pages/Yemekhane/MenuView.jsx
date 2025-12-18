@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, Tabs, Input, Row, Col, Badge, Tag, Empty, Spin, Alert, Button, Typography, Space, Tooltip, Statistic } from 'antd';
 import { SearchOutlined, CalendarOutlined, FireOutlined, LeftOutlined, RightOutlined, StarOutlined } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -11,22 +11,11 @@ import {
     setCurrentMonth,
     setActiveTab,
     setSearchTerm,
-    clearSearchResults,
-    toggleWeeklyPopup,
-    toggleMonthlyPopup,
-    toggleDayEvaluationPopup,
-    selectMenuData,
-    selectSelectedDate,
-    selectCurrentMonth,
-    selectActiveTab,
-    selectSearchTerm,
-    selectSearchResults,
-    selectShowSearchResults,
-    selectShowWeeklyPopup,
-    selectShowMonthlyPopup,
-    selectShowDayEvaluationPopup,
-    selectLoading,
-    selectSearchLoading
+    clearSearch,                 // ✅
+    setShowWeeklyPopup,          // ✅
+    setShowMonthlyPopup,         // ✅
+    setShowDayEvaluationPopup,   // ✅
+    // ...
 } from '@/store/slices/yemekhaneSlice';
 import {
     MEAL_TIMES,
@@ -55,9 +44,6 @@ const MenuView = () => {
     const dispatch = useDispatch();
     const { user } = useAuth();
 
-    // Ref to track initial mount
-    const isInitialMount = useRef(true);
-
     // Redux state
     const menuData = useSelector(selectMenuData);
     const selectedDate = useSelector(selectSelectedDate);
@@ -77,39 +63,41 @@ const MenuView = () => {
     const [showRatingModal, setShowRatingModal] = useState(false);
     const [hasExistingEvaluation, setHasExistingEvaluation] = useState(false);
 
-    // Initialize - ONLY on first mount
+    // Initialize
     useEffect(() => {
-        if (isInitialMount.current) {
-            isInitialMount.current = false;
+        const today = dayjs().format('YYYY-MM-DD');
+        const month = dayjs().format('YYYY-MM');
 
-            const today = dayjs().format('YYYY-MM-DD');
-            const month = dayjs().format('YYYY-MM');
+        dispatch(setSelectedDate(today));
+        dispatch(setCurrentMonth(month));
+        dispatch(setActiveTab(getDefaultMealTab()));
+        dispatch(fetchTodayMenu());
+    }, [dispatch]);
 
-            dispatch(setSelectedDate(today));
-            dispatch(setCurrentMonth(month));
-            dispatch(setActiveTab(getDefaultMealTab()));
-            dispatch(fetchMenuByDate(today));
+    // Load menu when date changes
+    useEffect(() => {
+        if (selectedDate) {
+            dispatch(fetchMenuByDate(selectedDate));
+            checkExistingEvaluation();
         }
-    }, []); // Empty dependency - only runs once on mount
+    }, [selectedDate, dispatch]);
 
-    // Check if user has existing evaluation for selected date
-    const checkExistingEvaluation = useCallback(async (date) => {
-        if (!user?.uId || !date) {
+    // Check if user has existing evaluation for today
+    const checkExistingEvaluation = useCallback(async () => {
+        if (!user?.uId || !selectedDate) {
             setHasExistingEvaluation(false);
             return;
         }
 
         try {
-            const response = await dayPointService.getByDate(date);
-            const points = response?.data || response || [];
-            const userPoint = Array.isArray(points)
-                ? points.find(p => p.uId === user.uId)
-                : null;
+            const response = await dayPointService.getByDate(selectedDate);
+            const points = response?.data || [];
+            const userPoint = points.find(p => p.uId === user.uId);
             setHasExistingEvaluation(!!userPoint);
         } catch (error) {
             setHasExistingEvaluation(false);
         }
-    }, [user?.uId]);
+    }, [user, selectedDate]);
 
     // Generate calendar days (42 days for 6 weeks)
     const calendarDays = useMemo(() => {
@@ -147,181 +135,126 @@ const MenuView = () => {
         return menuData.filter(item => item.mealTime === mealTime);
     }, [menuData, activeTab]);
 
-    // Group menu by category
+    // Group by category
     const groupedMenu = useMemo(() => {
-        if (!filteredMenu || filteredMenu.length === 0) return [];
+        const groups = {};
 
-        const grouped = {};
         filteredMenu.forEach(item => {
             const category = item.category || 'Diğer';
-            if (!grouped[category]) {
-                grouped[category] = [];
+            if (!groups[category]) {
+                groups[category] = [];
             }
-            grouped[category].push(item);
+            groups[category].push(item);
         });
 
         // Sort by category order
-        const categoryOrder = ['ÇORBA', 'ANA YEMEK', 'SPESYEL SALATA', 'YARDIMCI YEMEK', 'CORNER', 'Diğer'];
-        const sortedEntries = Object.entries(grouped).sort((a, b) => {
+        const categoryOrder = MEAL_CATEGORIES.map(c => c.label);
+        return Object.entries(groups).sort((a, b) => {
             const indexA = categoryOrder.indexOf(a[0]);
             const indexB = categoryOrder.indexOf(b[0]);
             return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
         });
-
-        return sortedEntries;
     }, [filteredMenu]);
 
     // Calculate total calories
     const totalCalories = useMemo(() => {
-        return filteredMenu.reduce((sum, item) => sum + (item.calorie || 0), 0);
+        return filteredMenu.reduce((total, item) => total + (item.calorie || 0), 0);
     }, [filteredMenu]);
 
-    // Handle date selection from calendar
-    const handleDateSelect = useCallback((date) => {
-        if (date !== selectedDate) {
-            dispatch(setSelectedDate(date));
-            dispatch(fetchMenuByDate(date));
-            checkExistingEvaluation(date);
-        }
-    }, [dispatch, selectedDate, checkExistingEvaluation]);
+    // Navigation
+    const goToPrevMonth = () => {
+        const prev = dayjs(currentMonth + '-01').subtract(1, 'month').format('YYYY-MM');
+        dispatch(setCurrentMonth(prev));
+    };
 
-    // Handle month navigation
-    const handlePrevMonth = useCallback(() => {
-        const newMonth = dayjs(currentMonth + '-01').subtract(1, 'month').format('YYYY-MM');
-        dispatch(setCurrentMonth(newMonth));
-    }, [dispatch, currentMonth]);
+    const goToNextMonth = () => {
+        const next = dayjs(currentMonth + '-01').add(1, 'month').format('YYYY-MM');
+        dispatch(setCurrentMonth(next));
+    };
 
-    const handleNextMonth = useCallback(() => {
-        const newMonth = dayjs(currentMonth + '-01').add(1, 'month').format('YYYY-MM');
-        dispatch(setCurrentMonth(newMonth));
-    }, [dispatch, currentMonth]);
+    const goToToday = () => {
+        const today = dayjs().format('YYYY-MM-DD');
+        const month = dayjs().format('YYYY-MM');
+        dispatch(setSelectedDate(today));
+        dispatch(setCurrentMonth(month));
+    };
 
-    // Handle search
+    const selectDate = (dateString) => {
+        dispatch(setSelectedDate(dateString));
+    };
+
+    // Search handling
     const handleSearch = useCallback((value) => {
         dispatch(setSearchTerm(value));
-        if (value && value.trim().length >= 2) {
+        if (value.trim().length >= 2) {
             dispatch(searchFood(value.trim()));
         } else {
             dispatch(clearSearchResults());
         }
     }, [dispatch]);
 
-    // Handle tab change
-    const handleTabChange = useCallback((key) => {
-        dispatch(setActiveTab(key === 'lunch' ? MEAL_TIMES.LUNCH : MEAL_TIMES.DINNER));
-    }, [dispatch]);
-
-    // Open rating modal
-    const openRatingModal = useCallback((item) => {
-        setSelectedMenuItem(item);
-        setShowRatingModal(true);
-    }, []);
-
-    // Get current month/year display
-    const monthYearDisplay = useMemo(() => {
-        const monthIndex = dayjs(currentMonth + '-01').month();
-        const year = dayjs(currentMonth + '-01').year();
-        return `${MONTH_NAMES[monthIndex]} ${year}`;
-    }, [currentMonth]);
-
-    // Render calendar day cell
-    const renderDayCell = (day) => {
-        const cellClass = `
-            p-2 text-center cursor-pointer rounded transition-all
-            ${day.isCurrentMonth ? '' : 'opacity-40'}
-            ${day.isToday ? 'border-2 border-blue-500' : ''}
-            ${day.isSelected ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}
-            ${day.isWeekend && !day.isSelected ? 'text-red-500' : ''}
-        `;
-
-        return (
-            <div
-                key={day.date}
-                className={cellClass}
-                onClick={() => handleDateSelect(day.date)}
-            >
-                {day.day}
-            </div>
-        );
+    const goToDateFromSearch = (dateString) => {
+        const month = dayjs(dateString).format('YYYY-MM');
+        dispatch(setCurrentMonth(month));
+        dispatch(setSelectedDate(dateString));
+        dispatch(clearSearchResults());
+        dispatch(setSearchTerm(''));
     };
 
-    // Render menu item card
-    const renderMenuItem = (item) => (
-        <Card
-            key={item.id}
-            size="small"
-            style={{ marginBottom: 8 }}
-            hoverable
-            onClick={() => openRatingModal(item)}
-        >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Space>
-                    <Text strong>{item.foodName}</Text>
-                    {item.calorie > 0 && (
-                        <Tag color="orange">
-                            <FireOutlined /> {item.calorie} kcal
-                        </Tag>
-                    )}
-                </Space>
-                {item.averageRating > 0 && (
-                    <Space>
-                        <StarOutlined style={{ color: '#faad14' }} />
-                        <Text>{item.averageRating.toFixed(1)}</Text>
-                    </Space>
-                )}
-            </div>
-        </Card>
-    );
+    // Open rating modal
+    const openRatingModal = (item) => {
+        setSelectedMenuItem(item);
+        setShowRatingModal(true);
+    };
 
-    // Tab items
+    // Get month title
+    const getMonthTitle = () => {
+        const monthDate = dayjs(currentMonth + '-01');
+        return `${MONTH_NAMES[monthDate.month()]} ${monthDate.year()}`;
+    };
+
+    // Check if selected date is today
+    const isTodaySelected = checkIsToday(selectedDate);
+
     const tabItems = [
-        {
-            key: 'lunch',
-            label: 'Öğle Yemeği',
-        },
-        {
-            key: 'dinner',
-            label: 'Akşam Yemeği',
-        }
+        { key: 'lunch', label: '🍽️ Öğle Yemeği' },
+        { key: 'dinner', label: '🌙 Akşam Yemeği' }
     ];
 
     return (
-        <div>
-            <Row gutter={[16, 16]}>
-                {/* Calendar Section */}
+        <div style={{ padding: '24px' }}>
+            <Row gutter={[24, 24]}>
+                {/* Left - Calendar */}
                 <Col xs={24} lg={8}>
-                    <Card
-                        title={
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Button
-                                    type="text"
-                                    icon={<LeftOutlined />}
-                                    onClick={handlePrevMonth}
-                                />
-                                <Text strong>{monthYearDisplay}</Text>
-                                <Button
-                                    type="text"
-                                    icon={<RightOutlined />}
-                                    onClick={handleNextMonth}
-                                />
-                            </div>
-                        }
-                        extra={
-                            <Space>
-                                <Tooltip title="Haftalık Görünüm">
-                                    <Button
-                                        type="text"
-                                        icon={<CalendarOutlined />}
-                                        onClick={() => dispatch(toggleWeeklyPopup())}
-                                    />
-                                </Tooltip>
-                            </Space>
-                        }
-                    >
+                    <Card>
+                        {/* Calendar Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                            <Button icon={<LeftOutlined />} onClick={goToPrevMonth} />
+                            <Title level={4} style={{ margin: 0 }}>{getMonthTitle()}</Title>
+                            <Button icon={<RightOutlined />} onClick={goToNextMonth} />
+                        </div>
+
+                        {/* Today Button */}
+                        <Button
+                            type="link"
+                            onClick={goToToday}
+                            style={{ marginBottom: 8, padding: 0 }}
+                        >
+                            Bugüne Git
+                        </Button>
+
                         {/* Day Headers */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 8 }}>
-                            {DAY_NAMES.map((day, index) => (
-                                <div key={index} style={{ textAlign: 'center', fontWeight: 'bold', color: index >= 5 ? '#ff4d4f' : undefined }}>
+                            {DAY_NAMES.map((day, idx) => (
+                                <div
+                                    key={day}
+                                    style={{
+                                        textAlign: 'center',
+                                        fontWeight: 'bold',
+                                        padding: 4,
+                                        color: idx >= 5 ? '#fa8c16' : '#000'
+                                    }}
+                                >
                                     {day}
                                 </div>
                             ))}
@@ -329,82 +262,120 @@ const MenuView = () => {
 
                         {/* Calendar Grid */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
-                            {calendarDays.map(renderDayCell)}
+                            {calendarDays.map((day) => (
+                                <div
+                                    key={day.date}
+                                    onClick={() => selectDate(day.date)}
+                                    style={{
+                                        textAlign: 'center',
+                                        padding: 8,
+                                        cursor: 'pointer',
+                                        borderRadius: 4,
+                                        backgroundColor: day.isSelected
+                                            ? '#1890ff'
+                                            : day.isToday
+                                                ? '#e6f7ff'
+                                                : 'transparent',
+                                        color: day.isSelected
+                                            ? '#fff'
+                                            : !day.isCurrentMonth
+                                                ? '#bfbfbf'
+                                                : day.isWeekend
+                                                    ? '#fa8c16'
+                                                    : '#000',
+                                        fontWeight: day.isToday ? 'bold' : 'normal',
+                                        border: day.isToday && !day.isSelected ? '1px solid #1890ff' : 'none'
+                                    }}
+                                >
+                                    {day.day}
+                                </div>
+                            ))}
                         </div>
 
                         {/* Quick Actions */}
-                        <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+                        <Space style={{ marginTop: 16, width: '100%' }} direction="vertical">
                             <Button
                                 block
-                                onClick={() => handleDateSelect(dayjs().format('YYYY-MM-DD'))}
+                                icon={<CalendarOutlined />}
+                                onClick={() => dispatch(toggleWeeklyPopup())}
                             >
-                                Bugün
+                                Haftalık Görünüm
                             </Button>
                             <Button
                                 block
+                                icon={<CalendarOutlined />}
                                 onClick={() => dispatch(toggleMonthlyPopup())}
                             >
                                 Aylık Görünüm
                             </Button>
-                        </div>
-                    </Card>
-
-                    {/* Search */}
-                    <Card style={{ marginTop: 16 }}>
-                        <Search
-                            placeholder="Yemek ara..."
-                            value={searchTerm}
-                            onChange={(e) => handleSearch(e.target.value)}
-                            loading={searchLoading}
-                            allowClear
-                        />
-                        {showSearchResults && searchResults.length > 0 && (
-                            <div style={{ marginTop: 8 }}>
-                                <Text type="secondary">{searchResults.length} sonuç bulundu</Text>
-                                {searchResults.slice(0, 5).map(item => (
-                                    <Tag
-                                        key={item.id}
-                                        style={{ margin: 4, cursor: 'pointer' }}
-                                        onClick={() => openRatingModal(item)}
-                                    >
-                                        {item.foodName}
-                                    </Tag>
-                                ))}
-                            </div>
-                        )}
+                        </Space>
                     </Card>
                 </Col>
 
-                {/* Menu Section */}
+                {/* Right - Menu */}
                 <Col xs={24} lg={16}>
-                    <Card
-                        title={
+                    <Card>
+                        {/* Search */}
+                        <Search
+                            placeholder="Yemek ara..."
+                            allowClear
+                            value={searchTerm}
+                            onChange={(e) => handleSearch(e.target.value)}
+                            loading={searchLoading}
+                            style={{ marginBottom: 16 }}
+                        />
+
+                        {/* Search Results */}
+                        {showSearchResults && searchResults.length > 0 && (
+                            <div style={{
+                                marginBottom: 16,
+                                padding: 12,
+                                background: '#fafafa',
+                                borderRadius: 8,
+                                maxHeight: 200,
+                                overflow: 'auto'
+                            }}>
+                                <Text strong style={{ marginBottom: 8, display: 'block' }}>Arama Sonuçları:</Text>
+                                {searchResults.map((item, idx) => (
+                                    <div
+                                        key={item.id || idx}
+                                        style={{
+                                            padding: '4px 0',
+                                            cursor: 'pointer',
+                                            borderBottom: '1px dashed #f0f0f0'
+                                        }}
+                                        onClick={() => goToDateFromSearch(item.menuDate)}
+                                    >
+                                        <Space>
+                                            <Tag color={getCategoryColor(item.category)}>{item.category}</Tag>
+                                            <span>{item.foodName}</span>
+                                            <Text type="secondary">
+                                                {dayjs(item.menuDate).format('DD.MM.YYYY')}
+                                            </Text>
+                                        </Space>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Selected Date Info */}
+                        <div style={{ marginBottom: 16 }}>
                             <Space>
-                                <CalendarOutlined />
-                                <Text strong>
+                                <Title level={4} style={{ margin: 0 }}>
                                     {dayjs(selectedDate).format('DD MMMM YYYY dddd')}
-                                </Text>
-                                {checkIsToday(selectedDate) && (
-                                    <Badge status="processing" text="Bugün" />
-                                )}
+                                </Title>
+                                {isTodaySelected && <Badge status="success" text="Bugün" />}
                             </Space>
-                        }
-                        extra={
-                            totalCalories > 0 && (
-                                <Statistic
-                                    value={totalCalories}
-                                    suffix="kcal"
-                                    valueStyle={{ fontSize: 16 }}
-                                />
-                            )
-                        }
-                    >
+                        </div>
+
+                        {/* Tabs */}
                         <Tabs
-                            activeKey={activeTab === MEAL_TIMES.LUNCH ? 'lunch' : 'dinner'}
-                            onChange={handleTabChange}
+                            activeKey={activeTab}
+                            onChange={(key) => dispatch(setActiveTab(key))}
                             items={tabItems}
                         />
 
+                        {/* Menu Content */}
                         {loading ? (
                             <div style={{ textAlign: 'center', padding: 40 }}>
                                 <Spin size="large" />
@@ -421,24 +392,66 @@ const MenuView = () => {
                                         >
                                             {getCategoryIcon(category)} {category}
                                         </Tag>
-                                        {items.map(renderMenuItem)}
+                                        {items.map((item) => (
+                                            <Card
+                                                key={item.id}
+                                                size="small"
+                                                style={{ marginBottom: 8 }}
+                                                hoverable
+                                                onClick={() => openRatingModal(item)}
+                                            >
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <Space>
+                                                        <Text>{item.foodName}</Text>
+                                                        {item.averageRating > 0 && (
+                                                            <Tooltip title={`Ortalama: ${item.averageRating.toFixed(1)}`}>
+                                                                <Tag color="gold">
+                                                                    <StarOutlined /> {item.averageRating.toFixed(1)}
+                                                                </Tag>
+                                                            </Tooltip>
+                                                        )}
+                                                    </Space>
+                                                    {item.calorie > 0 && (
+                                                        <Text type="secondary">
+                                                            <FireOutlined style={{ color: '#fa8c16' }} /> {item.calorie} kcal
+                                                        </Text>
+                                                    )}
+                                                </div>
+                                            </Card>
+                                        ))}
                                     </div>
                                 ))}
-                            </>
-                        )}
 
-                        {/* Day Evaluation Button */}
-                        {selectedDate && (
-                            <>
-                                <div style={{ marginTop: 16, textAlign: 'center' }}>
+                                {/* Total Calories */}
+                                {totalCalories > 0 && (
+                                    <div style={{
+                                        marginTop: 16,
+                                        padding: 12,
+                                        background: '#fff7e6',
+                                        borderRadius: 8,
+                                        textAlign: 'center'
+                                    }}>
+                                        <Statistic
+                                            title="Toplam Kalori"
+                                            value={totalCalories}
+                                            suffix="kcal"
+                                            prefix={<FireOutlined style={{ color: '#fa8c16' }} />}
+                                        />
+                                    </div>
+                                )}
+
+                                {/* Day Evaluation Button */}
+                                {isTodaySelected && (
                                     <Button
-                                        type={hasExistingEvaluation ? 'default' : 'primary'}
+                                        type="primary"
+                                        block
+                                        style={{ marginTop: 16 }}
                                         icon={<StarOutlined />}
                                         onClick={() => dispatch(toggleDayEvaluationPopup())}
                                     >
                                         {hasExistingEvaluation ? 'Gün Değerlendirmesini Düzenle' : 'Günü Değerlendir'}
                                     </Button>
-                                </div>
+                                )}
                             </>
                         )}
                     </Card>
@@ -457,7 +470,7 @@ const MenuView = () => {
                 visible={showDayEvaluationPopup}
                 onClose={() => dispatch(toggleDayEvaluationPopup())}
                 date={selectedDate}
-                onUpdate={() => checkExistingEvaluation(selectedDate)}
+                onUpdate={checkExistingEvaluation}
             />
 
             <WeeklyMenuModal

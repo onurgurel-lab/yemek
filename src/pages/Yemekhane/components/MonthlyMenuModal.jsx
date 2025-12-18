@@ -98,8 +98,8 @@ const MonthlyMenuModal = ({ visible, onClose, month }) => {
         }
     }, [visible, currentMonth, loadMonthData]);
 
-    // Navigate months
-    const goToPreviousMonth = () => {
+    // Navigation
+    const goToPrevMonth = () => {
         setCurrentMonth(dayjs(currentMonth + '-01').subtract(1, 'month').format('YYYY-MM'));
     };
 
@@ -107,148 +107,151 @@ const MonthlyMenuModal = ({ visible, onClose, month }) => {
         setCurrentMonth(dayjs(currentMonth + '-01').add(1, 'month').format('YYYY-MM'));
     };
 
+    // Get month title
+    const getMonthTitle = () => {
+        const monthDate = dayjs(currentMonth + '-01');
+        const monthIndex = monthDate.month();
+        const year = monthDate.year();
+        return `${MONTH_NAMES[monthIndex]} ${year}`;
+    };
+
+    // Get category summary for a day
+    const getCategorySummary = (items) => {
+        const categories = {};
+        items.forEach(item => {
+            const cat = item.category || 'Diğer';
+            categories[cat] = (categories[cat] || 0) + 1;
+        });
+        return Object.entries(categories);
+    };
+
+    // Build tooltip content
+    const buildTooltipContent = (items) => {
+        if (items.length === 0) return null;
+
+        return (
+            <div style={{ maxWidth: 200 }}>
+                {items.map((item, idx) => (
+                    <div key={item.id || idx} style={{ padding: '2px 0' }}>
+                        <Tag color={getCategoryColor(item.category)} style={{ fontSize: 10, marginRight: 4 }}>
+                            {item.category}
+                        </Tag>
+                        <span style={{ fontSize: 11 }}>{item.foodName}</span>
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
+    const calendarDays = generateCalendarDays();
+    const mealKey = activeTab === 'lunch' ? 'lunch' : 'dinner';
+
+    const tabItems = [
+        { key: 'lunch', label: '🍽️ Öğle' },
+        { key: 'dinner', label: '🌙 Akşam' }
+    ];
+
     // Render day cell
-    const renderDayCell = (day, mealType) => {
-        const items = monthData[day.date]?.[mealType] || [];
-        const hasMenu = items.length > 0;
+    const renderDayCell = (day) => {
+        const dayMenus = monthData[day.date]?.[mealKey] || [];
+        const categorySummary = getCategorySummary(dayMenus);
+        const hasMenu = dayMenus.length > 0;
 
         return (
             <Tooltip
-                title={
-                    hasMenu ? (
-                        <div>
-                            {items.map((item, idx) => (
-                                <div key={idx}>{item.foodName}</div>
-                            ))}
-                        </div>
-                    ) : 'Menü yok'
-                }
+                title={buildTooltipContent(dayMenus)}
+                placement="top"
+                overlayStyle={{ maxWidth: 250 }}
             >
                 <div
                     style={{
+                        width: '100%',
+                        height: 80,
                         padding: 4,
-                        minHeight: 60,
+                        border: day.isToday ? '2px solid #1890ff' : '1px solid #f0f0f0',
+                        borderRadius: 4,
                         backgroundColor: !day.isCurrentMonth
                             ? '#fafafa'
                             : day.isToday
                                 ? '#e6f7ff'
                                 : day.isWeekend
-                                    ? '#f9f9f9'
-                                    : 'white',
-                        border: day.isToday ? '2px solid #1890ff' : '1px solid #f0f0f0',
-                        borderRadius: 4,
-                        opacity: day.isCurrentMonth ? 1 : 0.5
+                                    ? '#fffbe6'
+                                    : '#fff',
+                        opacity: day.isCurrentMonth ? 1 : 0.5,
+                        cursor: hasMenu ? 'pointer' : 'default',
+                        overflow: 'hidden'
                     }}
                 >
-                    <div style={{ fontWeight: day.isToday ? 'bold' : 'normal', marginBottom: 4 }}>
-                        {day.dayNumber}
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: 4
+                    }}>
+                        <Text
+                            strong={day.isToday}
+                            style={{
+                                fontSize: 12,
+                                color: day.isToday ? '#1890ff' : (day.isCurrentMonth ? '#000' : '#bfbfbf')
+                            }}
+                        >
+                            {day.dayNumber}
+                        </Text>
+                        {hasMenu && (
+                            <Badge
+                                count={dayMenus.length}
+                                size="small"
+                                style={{ backgroundColor: '#52c41a' }}
+                            />
+                        )}
                     </div>
-                    {hasMenu ? (
-                        <div>
-                            {items.slice(0, 2).map((item, idx) => (
+
+                    <div style={{ overflow: 'hidden', height: 50 }}>
+                        {!hasMenu && day.isCurrentMonth && (
+                            <Text type="secondary" style={{ fontSize: 10 }}>-</Text>
+                        )}
+                        {categorySummary.slice(0, 3).map(([category, count], idx) => (
+                            <div key={category} style={{ marginBottom: 2 }}>
                                 <Tag
-                                    key={idx}
-                                    color={getCategoryColor(item.category)}
-                                    style={{ fontSize: 10, marginBottom: 2, display: 'block' }}
+                                    color={getCategoryColor(category)}
+                                    style={{
+                                        fontSize: 9,
+                                        padding: '0 4px',
+                                        lineHeight: '16px',
+                                        marginRight: 0
+                                    }}
                                 >
-                                    {item.foodName.length > 10
-                                        ? item.foodName.substring(0, 10) + '...'
-                                        : item.foodName}
+                                    {category.substring(0, 6)}{category.length > 6 ? '..' : ''} ({count})
                                 </Tag>
-                            ))}
-                            {items.length > 2 && (
-                                <Text type="secondary" style={{ fontSize: 10 }}>
-                                    +{items.length - 2} daha
-                                </Text>
-                            )}
-                        </div>
-                    ) : (
-                        <Empty
-                            image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            description=""
-                            style={{ margin: 0 }}
-                            imageStyle={{ height: 20 }}
-                        />
-                    )}
+                            </div>
+                        ))}
+                        {categorySummary.length > 3 && (
+                            <Text type="secondary" style={{ fontSize: 9 }}>
+                                +{categorySummary.length - 3} kategori
+                            </Text>
+                        )}
+                    </div>
                 </div>
             </Tooltip>
         );
     };
 
-    const calendarDays = generateCalendarDays();
-    const weeks = [];
-    for (let i = 0; i < 6; i++) {
-        weeks.push(calendarDays.slice(i * 7, (i + 1) * 7));
-    }
-
-    const monthName = MONTH_NAMES[dayjs(currentMonth + '-01').month()];
-    const year = dayjs(currentMonth + '-01').year();
-
-    const renderCalendar = (mealType) => (
-        <Spin spinning={loading}>
-            <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
-                    <thead>
-                    <tr>
-                        {DAY_NAMES.map((dayName, idx) => (
-                            <th
-                                key={idx}
-                                style={{
-                                    padding: 8,
-                                    textAlign: 'center',
-                                    backgroundColor: '#fafafa',
-                                    borderBottom: '1px solid #f0f0f0'
-                                }}
-                            >
-                                {dayName}
-                            </th>
-                        ))}
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {weeks.map((week, weekIdx) => (
-                        <tr key={weekIdx}>
-                            {week.map((day, dayIdx) => (
-                                <td key={dayIdx} style={{ padding: 2, verticalAlign: 'top' }}>
-                                    {renderDayCell(day, mealType)}
-                                </td>
-                            ))}
-                        </tr>
-                    ))}
-                    </tbody>
-                </table>
-            </div>
-        </Spin>
-    );
-
-    const tabItems = [
-        {
-            key: 'lunch',
-            label: 'Öğle Yemeği',
-            children: renderCalendar('lunch')
-        },
-        {
-            key: 'dinner',
-            label: 'Akşam Yemeği',
-            children: renderCalendar('dinner')
-        }
-    ];
-
     return (
         <Modal
             title={
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>
-                        <CalendarOutlined /> Aylık Menü Takvimi
-                    </span>
+                    <div>
+                        <CalendarOutlined style={{ marginRight: 8 }} />
+                        Aylık Menü
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                         <LeftOutlined
-                            onClick={goToPreviousMonth}
+                            onClick={goToPrevMonth}
                             style={{ cursor: 'pointer', fontSize: 16 }}
                         />
-                        <span style={{ fontWeight: 'bold', minWidth: 150, textAlign: 'center' }}>
-                            {monthName} {year}
-                        </span>
+                        <span style={{ minWidth: 150, textAlign: 'center', fontWeight: 'bold' }}>
+              {getMonthTitle()}
+            </span>
                         <RightOutlined
                             onClick={goToNextMonth}
                             style={{ cursor: 'pointer', fontSize: 16 }}
@@ -259,14 +262,105 @@ const MonthlyMenuModal = ({ visible, onClose, month }) => {
             open={visible}
             onCancel={onClose}
             footer={null}
-            width="95%"
-            style={{ top: 20 }}
+            width={900}
+            bodyStyle={{ padding: '12px 24px' }}
+            destroyOnClose
         >
             <Tabs
                 activeKey={activeTab}
                 onChange={setActiveTab}
                 items={tabItems}
+                style={{ marginBottom: 8 }}
             />
+
+            {loading ? (
+                <div style={{ textAlign: 'center', padding: '60px' }}>
+                    <Spin size="large" />
+                </div>
+            ) : (
+                <div>
+                    {/* Day headers */}
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(7, 1fr)',
+                        gap: 4,
+                        marginBottom: 8
+                    }}>
+                        {DAY_NAMES.map((dayName, idx) => (
+                            <div
+                                key={dayName}
+                                style={{
+                                    textAlign: 'center',
+                                    fontWeight: 'bold',
+                                    padding: 4,
+                                    backgroundColor: idx === 5 || idx === 6 ? '#fff7e6' : '#fafafa',
+                                    borderRadius: 4
+                                }}
+                            >
+                                {dayName}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Calendar grid */}
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(7, 1fr)',
+                        gap: 4
+                    }}>
+                        {calendarDays.map((day) => (
+                            <div key={day.date}>
+                                {renderDayCell(day)}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Legend */}
+                    <div style={{
+                        marginTop: 16,
+                        padding: 12,
+                        background: '#fafafa',
+                        borderRadius: 8,
+                        display: 'flex',
+                        justifyContent: 'center',
+                        gap: 16,
+                        flexWrap: 'wrap'
+                    }}>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+              <span style={{
+                  display: 'inline-block',
+                  width: 12,
+                  height: 12,
+                  backgroundColor: '#e6f7ff',
+                  border: '2px solid #1890ff',
+                  marginRight: 4,
+                  verticalAlign: 'middle'
+              }}></span>
+                            Bugün
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+              <span style={{
+                  display: 'inline-block',
+                  width: 12,
+                  height: 12,
+                  backgroundColor: '#fffbe6',
+                  border: '1px solid #f0f0f0',
+                  marginRight: 4,
+                  verticalAlign: 'middle'
+              }}></span>
+                            Hafta sonu
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                            <Badge
+                                count={3}
+                                size="small"
+                                style={{ backgroundColor: '#52c41a', marginRight: 4 }}
+                            />
+                            Yemek sayısı
+                        </Text>
+                    </div>
+                </div>
+            )}
         </Modal>
     );
 };

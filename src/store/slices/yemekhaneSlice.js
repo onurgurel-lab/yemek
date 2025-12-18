@@ -72,16 +72,16 @@ export const createMenuItem = createAsyncThunk(
             const data = await mealMenuService.createMenuItem(menuData);
             return data;
         } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Menü oluşturulamadı');
+            return rejectWithValue(error.response?.data?.message || 'Menü eklenemedi');
         }
     }
 );
 
 export const updateMenuItem = createAsyncThunk(
     'yemekhane/updateMenuItem',
-    async (menuData, { rejectWithValue }) => {
+    async ({ id, menuData }, { rejectWithValue }) => {
         try {
-            const data = await mealMenuService.updateMenuItem(menuData);
+            const data = await mealMenuService.updateMenuItem(id, menuData);
             return data;
         } catch (error) {
             return rejectWithValue(error.response?.data?.message || 'Menü güncellenemedi');
@@ -101,16 +101,14 @@ export const deleteMenuItem = createAsyncThunk(
     }
 );
 
-// ==================== ASYNC THUNKS - ARAMA ====================
-
 export const searchFood = createAsyncThunk(
     'yemekhane/searchFood',
     async (searchTerm, { rejectWithValue }) => {
         try {
-            const data = await mealMenuService.searchFoodByName(searchTerm);
+            const data = await mealMenuService.searchFood(searchTerm);
             return data;
         } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Arama yapılamadı');
+            return rejectWithValue(error.response?.data?.message || 'Arama başarısız');
         }
     }
 );
@@ -119,12 +117,12 @@ export const searchFood = createAsyncThunk(
 
 export const importFromExcel = createAsyncThunk(
     'yemekhane/importFromExcel',
-    async ({ file, onProgress }, { rejectWithValue }) => {
+    async (file, { rejectWithValue }) => {
         try {
-            const data = await excelService.importFromExcel(file, onProgress);
+            const data = await excelService.importFromExcel(file);
             return data;
         } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Excel içe aktarılamadı');
+            return rejectWithValue(error.message || 'Excel içe aktarımı başarısız');
         }
     }
 );
@@ -143,6 +141,32 @@ export const addMenuPoint = createAsyncThunk(
     }
 );
 
+export const updateMenuPoint = createAsyncThunk(
+    'yemekhane/updateMenuPoint',
+    async ({ id, pointData }, { rejectWithValue }) => {
+        try {
+            const data = await menuPointService.updatePoint(id, pointData);
+            return data;
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.message || 'Puan güncellenemedi');
+        }
+    }
+);
+
+export const deleteMenuPoint = createAsyncThunk(
+    'yemekhane/deleteMenuPoint',
+    async (id, { rejectWithValue }) => {
+        try {
+            await menuPointService.deletePoint(id);
+            return id;
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.message || 'Puan silinemedi');
+        }
+    }
+);
+
+// ==================== ASYNC THUNKS - YORUM ====================
+
 export const addMenuComment = createAsyncThunk(
     'yemekhane/addMenuComment',
     async (commentData, { rejectWithValue }) => {
@@ -154,6 +178,32 @@ export const addMenuComment = createAsyncThunk(
         }
     }
 );
+
+export const updateMenuComment = createAsyncThunk(
+    'yemekhane/updateMenuComment',
+    async ({ id, commentData }, { rejectWithValue }) => {
+        try {
+            const data = await menuCommentService.updateComment(id, commentData);
+            return data;
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.message || 'Yorum güncellenemedi');
+        }
+    }
+);
+
+export const deleteMenuComment = createAsyncThunk(
+    'yemekhane/deleteMenuComment',
+    async (id, { rejectWithValue }) => {
+        try {
+            await menuCommentService.deleteComment(id);
+            return id;
+        } catch (error) {
+            return rejectWithValue(error.response?.data?.message || 'Yorum silinemedi');
+        }
+    }
+);
+
+// ==================== ASYNC THUNKS - GÜN DEĞERLENDİRME ====================
 
 export const addDayPoint = createAsyncThunk(
     'yemekhane/addDayPoint',
@@ -297,14 +347,8 @@ const yemekhaneSlice = createSlice({
             state.searchResults = [];
             state.showSearchResults = false;
         },
-        // Alias for clearSearch (MenuView.jsx compatibility)
-        clearSearchResults: (state) => {
-            state.searchTerm = '';
-            state.searchResults = [];
-            state.showSearchResults = false;
-        },
 
-        // Modal işlemleri - Set
+        // Modal işlemleri
         setShowWeeklyPopup: (state, action) => {
             state.showWeeklyPopup = action.payload;
         },
@@ -314,18 +358,6 @@ const yemekhaneSlice = createSlice({
         setShowDayEvaluationPopup: (state, action) => {
             state.showDayEvaluationPopup = action.payload;
         },
-
-        // Modal işlemleri - Toggle (MenuView.jsx compatibility)
-        toggleWeeklyPopup: (state) => {
-            state.showWeeklyPopup = !state.showWeeklyPopup;
-        },
-        toggleMonthlyPopup: (state) => {
-            state.showMonthlyPopup = !state.showMonthlyPopup;
-        },
-        toggleDayEvaluationPopup: (state) => {
-            state.showDayEvaluationPopup = !state.showDayEvaluationPopup;
-        },
-
         setHasExistingEvaluation: (state, action) => {
             state.hasExistingEvaluation = action.payload;
         },
@@ -369,6 +401,7 @@ const yemekhaneSlice = createSlice({
             .addCase(fetchTodayMenu.fulfilled, (state, action) => {
                 state.loading = false;
                 state.menuData = action.payload || [];
+                state.selectedDate = new Date().toISOString().split('T')[0];
             })
             .addCase(fetchTodayMenu.rejected, (state, action) => {
                 state.loading = false;
@@ -408,10 +441,9 @@ const yemekhaneSlice = createSlice({
                 state.submitting = true;
                 state.error = null;
             })
-            .addCase(createMenuItem.fulfilled, (state, action) => {
+            .addCase(createMenuItem.fulfilled, (state) => {
                 state.submitting = false;
-                state.menuData = [...state.menuData, action.payload];
-                state.successMessage = 'Menü başarıyla oluşturuldu';
+                state.successMessage = 'Menü başarıyla eklendi';
             })
             .addCase(createMenuItem.rejected, (state, action) => {
                 state.submitting = false;
@@ -422,12 +454,8 @@ const yemekhaneSlice = createSlice({
                 state.submitting = true;
                 state.error = null;
             })
-            .addCase(updateMenuItem.fulfilled, (state, action) => {
+            .addCase(updateMenuItem.fulfilled, (state) => {
                 state.submitting = false;
-                const index = state.menuData.findIndex((item) => item.id === action.payload.id);
-                if (index !== -1) {
-                    state.menuData[index] = action.payload;
-                }
                 state.successMessage = 'Menü başarıyla güncellendi';
             })
             .addCase(updateMenuItem.rejected, (state, action) => {
@@ -490,6 +518,31 @@ const yemekhaneSlice = createSlice({
                 state.error = action.payload;
             })
 
+            .addCase(updateMenuPoint.pending, (state) => {
+                state.submitting = true;
+            })
+            .addCase(updateMenuPoint.fulfilled, (state) => {
+                state.submitting = false;
+                state.successMessage = 'Puan güncellendi';
+            })
+            .addCase(updateMenuPoint.rejected, (state, action) => {
+                state.submitting = false;
+                state.error = action.payload;
+            })
+
+            .addCase(deleteMenuPoint.pending, (state) => {
+                state.submitting = true;
+            })
+            .addCase(deleteMenuPoint.fulfilled, (state) => {
+                state.submitting = false;
+                state.successMessage = 'Puan silindi';
+            })
+            .addCase(deleteMenuPoint.rejected, (state, action) => {
+                state.submitting = false;
+                state.error = action.payload;
+            })
+
+            // ========== Menü Yorum ==========
             .addCase(addMenuComment.pending, (state) => {
                 state.submitting = true;
             })
@@ -498,6 +551,30 @@ const yemekhaneSlice = createSlice({
                 state.successMessage = 'Yorum eklendi';
             })
             .addCase(addMenuComment.rejected, (state, action) => {
+                state.submitting = false;
+                state.error = action.payload;
+            })
+
+            .addCase(updateMenuComment.pending, (state) => {
+                state.submitting = true;
+            })
+            .addCase(updateMenuComment.fulfilled, (state) => {
+                state.submitting = false;
+                state.successMessage = 'Yorum güncellendi';
+            })
+            .addCase(updateMenuComment.rejected, (state, action) => {
+                state.submitting = false;
+                state.error = action.payload;
+            })
+
+            .addCase(deleteMenuComment.pending, (state) => {
+                state.submitting = true;
+            })
+            .addCase(deleteMenuComment.fulfilled, (state) => {
+                state.submitting = false;
+                state.successMessage = 'Yorum silindi';
+            })
+            .addCase(deleteMenuComment.rejected, (state, action) => {
                 state.submitting = false;
                 state.error = action.payload;
             })
@@ -587,13 +664,9 @@ export const {
     setSearchTerm,
     setShowSearchResults,
     clearSearch,
-    clearSearchResults,
     setShowWeeklyPopup,
     setShowMonthlyPopup,
     setShowDayEvaluationPopup,
-    toggleWeeklyPopup,
-    toggleMonthlyPopup,
-    toggleDayEvaluationPopup,
     setHasExistingEvaluation,
     clearError,
     clearSuccessMessage,
