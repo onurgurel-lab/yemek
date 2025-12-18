@@ -3,20 +3,31 @@ import { Card, Tabs, Input, Row, Col, Badge, Tag, Empty, Spin, Alert, Button, Ty
 import { SearchOutlined, CalendarOutlined, FireOutlined, LeftOutlined, RightOutlined, StarOutlined } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { useAuth } from '@/hooks/useAuth';
-import {
-    fetchMenuByDate,
+import {fetchMenuByDate,
     fetchTodayMenu,
     searchFood,
     setSelectedDate,
     setCurrentMonth,
     setActiveTab,
     setSearchTerm,
-    clearSearch,                 // ✅
-    setShowWeeklyPopup,          // ✅
-    setShowMonthlyPopup,         // ✅
-    setShowDayEvaluationPopup,   // ✅
-    // ...
-} from '@/store/slices/yemekhaneSlice';
+    clearSearchResults,
+    toggleWeeklyPopup,
+    toggleMonthlyPopup,
+    toggleDayEvaluationPopup,
+    selectMenuData,
+    selectSelectedDate,
+    selectCurrentMonth,
+    selectActiveTab,
+    selectSearchTerm,
+    selectSearchResults,
+    selectShowSearchResults,
+    selectShowWeeklyPopup,
+    selectShowMonthlyPopup,
+    selectShowDayEvaluationPopup,
+    selectLoading,
+    selectSearchLoading}
+from '@/store/slices/yemekhaneSlice';
+
 import {
     MEAL_TIMES,
     MEAL_CATEGORIES,

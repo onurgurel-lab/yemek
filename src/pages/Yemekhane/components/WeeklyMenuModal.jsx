@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Modal, Tabs, Card, Tag, Empty, Spin, Typography, Row, Col, Badge, Tooltip } from 'antd';
 import { CalendarOutlined, FireOutlined } from '@ant-design/icons';
-import { mealMenuService } from '@/services/mealMenuService';
+import mealMenuService from '@/services/mealMenuService';
 import { MEAL_TIMES, MEAL_CATEGORIES, DAY_NAMES_FULL, getCategoryColor, getCategoryIcon } from '@/constants/mealMenuApi';
 import dayjs from 'dayjs';
 import 'dayjs/locale/tr';

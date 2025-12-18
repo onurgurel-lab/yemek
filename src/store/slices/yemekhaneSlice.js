@@ -347,6 +347,10 @@ const yemekhaneSlice = createSlice({
             state.searchResults = [];
             state.showSearchResults = false;
         },
+        clearSearchResults: (state) => {
+            state.searchResults = [];
+            state.showSearchResults = false;
+        },
 
         // Modal işlemleri
         setShowWeeklyPopup: (state, action) => {
@@ -358,6 +362,18 @@ const yemekhaneSlice = createSlice({
         setShowDayEvaluationPopup: (state, action) => {
             state.showDayEvaluationPopup = action.payload;
         },
+
+        // Toggle işlemleri
+        toggleWeeklyPopup: (state) => {
+            state.showWeeklyPopup = !state.showWeeklyPopup;
+        },
+        toggleMonthlyPopup: (state) => {
+            state.showMonthlyPopup = !state.showMonthlyPopup;
+        },
+        toggleDayEvaluationPopup: (state) => {
+            state.showDayEvaluationPopup = !state.showDayEvaluationPopup;
+        },
+
         setHasExistingEvaluation: (state, action) => {
             state.hasExistingEvaluation = action.payload;
         },
@@ -664,9 +680,13 @@ export const {
     setSearchTerm,
     setShowSearchResults,
     clearSearch,
+    clearSearchResults,
     setShowWeeklyPopup,
     setShowMonthlyPopup,
     setShowDayEvaluationPopup,
+    toggleWeeklyPopup,
+    toggleMonthlyPopup,
+    toggleDayEvaluationPopup,
     setHasExistingEvaluation,
     clearError,
     clearSuccessMessage,
