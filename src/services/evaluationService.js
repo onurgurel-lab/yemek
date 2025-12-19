@@ -2,6 +2,9 @@
  * Değerlendirme Servis Modülü
  * Menü ve gün puanlama/yorumlama işlemleri
  *
+ * ✅ FIX: Tüm POST/PUT istekleri JSON formatında gönderiliyor
+ * Format: {"mealMenuId":4136,"userName":"onur.gurel","point":3,"uId":"70cf407f8dfd4723"}
+ *
  * @module services/evaluationService
  */
 
@@ -9,6 +12,18 @@ import axiosInstance from '@/utils/axiosInstance';
 import { YEMEKHANE_ENDPOINTS } from '@/constants/mealMenuApi';
 
 const { MENU_POINT, MENU_COMMENT, DAY_POINT, DAY_COMMENT } = YEMEKHANE_ENDPOINTS;
+
+// ==================== JSON CONFIG ====================
+
+/**
+ * JSON istekleri için axios config
+ * FormData yerine JSON gönderir
+ */
+const jsonConfig = {
+    headers: {
+        'Content-Type': 'application/json'
+    }
+};
 
 // ==================== MENÜ PUANLAMA SERVİSİ ====================
 
@@ -47,17 +62,49 @@ export const menuPointService = {
 
     /**
      * Yeni puan ekler
+     * ✅ JSON formatında gönderir
+     *
+     * @param {Object} pointData
+     * @param {number} pointData.mealMenuId - Menü ID
+     * @param {string} pointData.userName - Kullanıcı adı
+     * @param {number} pointData.point - Puan (1-5)
+     * @param {string} pointData.uId - Kullanıcı ID
      */
     add: async (pointData) => {
-        const response = await axiosInstance.post(MENU_POINT.ADD, pointData);
+        const requestBody = {
+            mealMenuId: pointData.mealMenuId,
+            userName: pointData.userName,
+            point: pointData.point,
+            uId: pointData.uId
+        };
+
+        console.log('📤 MenuPoint Add Request:', JSON.stringify(requestBody));
+
+        const response = await axiosInstance.post(
+            MENU_POINT.ADD,
+            requestBody,
+            jsonConfig
+        );
         return response.data;
     },
 
     /**
      * Puanı günceller
+     * ✅ JSON formatında gönderir
      */
     update: async (pointData) => {
-        const response = await axiosInstance.put(MENU_POINT.UPDATE, pointData);
+        const requestBody = {
+            id: pointData.id,
+            point: pointData.point
+        };
+
+        console.log('📤 MenuPoint Update Request:', JSON.stringify(requestBody));
+
+        const response = await axiosInstance.put(
+            MENU_POINT.UPDATE,
+            requestBody,
+            jsonConfig
+        );
         return response.data;
     },
 
@@ -99,17 +146,49 @@ export const menuCommentService = {
 
     /**
      * Yeni yorum ekler
+     * ✅ JSON formatında gönderir
+     *
+     * @param {Object} commentData
+     * @param {number} commentData.mealMenuId - Menü ID
+     * @param {string} commentData.userName - Kullanıcı adı
+     * @param {string} commentData.comment - Yorum metni
+     * @param {string} commentData.uId - Kullanıcı ID
      */
     add: async (commentData) => {
-        const response = await axiosInstance.post(MENU_COMMENT.ADD, commentData);
+        const requestBody = {
+            mealMenuId: commentData.mealMenuId,
+            userName: commentData.userName,
+            comment: commentData.comment,
+            uId: commentData.uId
+        };
+
+        console.log('📤 MenuComment Add Request:', JSON.stringify(requestBody));
+
+        const response = await axiosInstance.post(
+            MENU_COMMENT.ADD,
+            requestBody,
+            jsonConfig
+        );
         return response.data;
     },
 
     /**
      * Yorumu günceller
+     * ✅ JSON formatında gönderir
      */
     update: async (commentData) => {
-        const response = await axiosInstance.put(MENU_COMMENT.UPDATE, commentData);
+        const requestBody = {
+            id: commentData.id,
+            comment: commentData.comment
+        };
+
+        console.log('📤 MenuComment Update Request:', JSON.stringify(requestBody));
+
+        const response = await axiosInstance.put(
+            MENU_COMMENT.UPDATE,
+            requestBody,
+            jsonConfig
+        );
         return response.data;
     },
 
@@ -151,27 +230,49 @@ export const dayPointService = {
 
     /**
      * Yeni gün puanı ekler
+     * ✅ JSON formatında gönderir
+     *
+     * @param {Object} pointData
+     * @param {string} pointData.pointDate - Puan tarihi (YYYY-MM-DD)
+     * @param {string} pointData.userName - Kullanıcı adı
+     * @param {string} pointData.uId - Kullanıcı ID
+     * @param {number} pointData.point - Puan (1-5)
      */
     add: async (pointData) => {
-        const requestData = {
+        const requestBody = {
             pointDate: pointData.pointDate,
             userName: pointData.userName,
             uId: pointData.uId,
             point: pointData.point
         };
-        const response = await axiosInstance.post(DAY_POINT.ADD, requestData);
+
+        console.log('📤 DayPoint Add Request:', JSON.stringify(requestBody));
+
+        const response = await axiosInstance.post(
+            DAY_POINT.ADD,
+            requestBody,
+            jsonConfig
+        );
         return response.data;
     },
 
     /**
      * Gün puanını günceller
+     * ✅ JSON formatında gönderir
      */
     update: async (pointData) => {
-        const requestData = {
+        const requestBody = {
             id: pointData.id,
             point: pointData.point
         };
-        const response = await axiosInstance.put(DAY_POINT.UPDATE, requestData);
+
+        console.log('📤 DayPoint Update Request:', JSON.stringify(requestBody));
+
+        const response = await axiosInstance.put(
+            DAY_POINT.UPDATE,
+            requestBody,
+            jsonConfig
+        );
         return response.data;
     },
 
@@ -213,27 +314,49 @@ export const dayCommentService = {
 
     /**
      * Yeni gün yorumu ekler
+     * ✅ JSON formatında gönderir
+     *
+     * @param {Object} commentData
+     * @param {string} commentData.commentDate - Yorum tarihi (YYYY-MM-DD)
+     * @param {string} commentData.userName - Kullanıcı adı
+     * @param {string} commentData.uId - Kullanıcı ID
+     * @param {string} commentData.comment - Yorum metni
      */
     add: async (commentData) => {
-        const requestData = {
+        const requestBody = {
             commentDate: commentData.commentDate,
             userName: commentData.userName,
             uId: commentData.uId,
             comment: commentData.comment
         };
-        const response = await axiosInstance.post(DAY_COMMENT.ADD, requestData);
+
+        console.log('📤 DayComment Add Request:', JSON.stringify(requestBody));
+
+        const response = await axiosInstance.post(
+            DAY_COMMENT.ADD,
+            requestBody,
+            jsonConfig
+        );
         return response.data;
     },
 
     /**
      * Gün yorumunu günceller
+     * ✅ JSON formatında gönderir
      */
     update: async (commentData) => {
-        const requestData = {
+        const requestBody = {
             id: commentData.id,
             comment: commentData.comment
         };
-        const response = await axiosInstance.put(DAY_COMMENT.UPDATE, requestData);
+
+        console.log('📤 DayComment Update Request:', JSON.stringify(requestBody));
+
+        const response = await axiosInstance.put(
+            DAY_COMMENT.UPDATE,
+            requestBody,
+            jsonConfig
+        );
         return response.data;
     },
 

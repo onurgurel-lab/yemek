@@ -1,6 +1,8 @@
 /**
  * Yemekhane Redux Slice
  * State yönetimi ve async thunk işlemleri
+ *
+ * ✅ FIX: searchFood thunk düzeltildi - artık doğru servis fonksiyonunu çağırıyor
  */
 
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
@@ -101,13 +103,18 @@ export const deleteMenuItem = createAsyncThunk(
     }
 );
 
+/**
+ * ✅ FIX: searchFood thunk - mealMenuService.searchFood çağırıyor
+ */
 export const searchFood = createAsyncThunk(
     'yemekhane/searchFood',
     async (searchTerm, { rejectWithValue }) => {
         try {
+            // ✅ searchFood fonksiyonu artık mealMenuService'de mevcut
             const data = await mealMenuService.searchFood(searchTerm);
             return data;
         } catch (error) {
+            console.error('Arama hatası:', error);
             return rejectWithValue(error.response?.data?.message || 'Arama başarısız');
         }
     }
@@ -133,103 +140,27 @@ export const addMenuPoint = createAsyncThunk(
     'yemekhane/addMenuPoint',
     async (pointData, { rejectWithValue }) => {
         try {
-            const data = await menuPointService.addPoint(pointData);
+            const data = await menuPointService.add(pointData);
             return data;
         } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Puan eklenemedi');
+            return rejectWithValue(error.response?.data?.message || 'Puanlama eklenemedi');
         }
     }
 );
 
 export const updateMenuPoint = createAsyncThunk(
     'yemekhane/updateMenuPoint',
-    async ({ id, pointData }, { rejectWithValue }) => {
-        try {
-            const data = await menuPointService.updatePoint(id, pointData);
-            return data;
-        } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Puan güncellenemedi');
-        }
-    }
-);
-
-export const deleteMenuPoint = createAsyncThunk(
-    'yemekhane/deleteMenuPoint',
-    async (id, { rejectWithValue }) => {
-        try {
-            await menuPointService.deletePoint(id);
-            return id;
-        } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Puan silinemedi');
-        }
-    }
-);
-
-// ==================== ASYNC THUNKS - YORUM ====================
-
-export const addMenuComment = createAsyncThunk(
-    'yemekhane/addMenuComment',
-    async (commentData, { rejectWithValue }) => {
-        try {
-            const data = await menuCommentService.addComment(commentData);
-            return data;
-        } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Yorum eklenemedi');
-        }
-    }
-);
-
-export const updateMenuComment = createAsyncThunk(
-    'yemekhane/updateMenuComment',
-    async ({ id, commentData }, { rejectWithValue }) => {
-        try {
-            const data = await menuCommentService.updateComment(id, commentData);
-            return data;
-        } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Yorum güncellenemedi');
-        }
-    }
-);
-
-export const deleteMenuComment = createAsyncThunk(
-    'yemekhane/deleteMenuComment',
-    async (id, { rejectWithValue }) => {
-        try {
-            await menuCommentService.deleteComment(id);
-            return id;
-        } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Yorum silinemedi');
-        }
-    }
-);
-
-// ==================== ASYNC THUNKS - GÜN DEĞERLENDİRME ====================
-
-export const addDayPoint = createAsyncThunk(
-    'yemekhane/addDayPoint',
     async (pointData, { rejectWithValue }) => {
         try {
-            const data = await dayPointService.addPoint(pointData);
+            const data = await menuPointService.update(pointData);
             return data;
         } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Gün puanı eklenemedi');
+            return rejectWithValue(error.response?.data?.message || 'Puanlama güncellenemedi');
         }
     }
 );
 
-export const addDayComment = createAsyncThunk(
-    'yemekhane/addDayComment',
-    async (commentData, { rejectWithValue }) => {
-        try {
-            const data = await dayCommentService.addComment(commentData);
-            return data;
-        } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Gün yorumu eklenemedi');
-        }
-    }
-);
-
-// ==================== ASYNC THUNKS - RAPORLAR ====================
+// ==================== ASYNC THUNKS - RAPORLAMA ====================
 
 export const fetchGeneralStats = createAsyncThunk(
     'yemekhane/fetchGeneralStats',
@@ -245,9 +176,9 @@ export const fetchGeneralStats = createAsyncThunk(
 
 export const fetchDailyAverages = createAsyncThunk(
     'yemekhane/fetchDailyAverages',
-    async ({ startDate, endDate }, { rejectWithValue }) => {
+    async (params, { rejectWithValue }) => {
         try {
-            const data = await reportService.getDailyAverages(startDate, endDate);
+            const data = await reportService.getDailyAverages(params);
             return data;
         } catch (error) {
             return rejectWithValue(error.response?.data?.message || 'Günlük ortalamalar yüklenemedi');
@@ -257,9 +188,9 @@ export const fetchDailyAverages = createAsyncThunk(
 
 export const fetchMealsByRating = createAsyncThunk(
     'yemekhane/fetchMealsByRating',
-    async (_, { rejectWithValue }) => {
+    async (params, { rejectWithValue }) => {
         try {
-            const data = await reportService.getMealsByRating();
+            const data = await reportService.getMealsByRating(params);
             return data;
         } catch (error) {
             return rejectWithValue(error.response?.data?.message || 'Yemek puanları yüklenemedi');
@@ -401,9 +332,8 @@ const yemekhaneSlice = createSlice({
             })
             .addCase(fetchMenuByDate.fulfilled, (state, action) => {
                 state.loading = false;
-                state.menuData = action.payload.data || [];
+                state.menuData = action.payload.data?.data || action.payload.data || [];
                 // NOT: selectedDate burada SET EDİLMEMELİ - döngüye neden olur!
-                // selectedDate sadece setSelectedDate action'ı ile değişmeli
             })
             .addCase(fetchMenuByDate.rejected, (state, action) => {
                 state.loading = false;
@@ -417,9 +347,7 @@ const yemekhaneSlice = createSlice({
             })
             .addCase(fetchTodayMenu.fulfilled, (state, action) => {
                 state.loading = false;
-                state.menuData = action.payload || [];
-                // NOT: selectedDate burada SET EDİLMEMELİ - döngüye neden olur!
-                // selectedDate sadece setSelectedDate action'ı ile değişmeli
+                state.menuData = action.payload?.data || action.payload || [];
             })
             .addCase(fetchTodayMenu.rejected, (state, action) => {
                 state.loading = false;
@@ -433,7 +361,7 @@ const yemekhaneSlice = createSlice({
             })
             .addCase(fetchMenusByMonth.fulfilled, (state, action) => {
                 state.loading = false;
-                state.monthlyMenus = action.payload || [];
+                state.monthlyMenus = action.payload?.data || action.payload || [];
             })
             .addCase(fetchMenusByMonth.rejected, (state, action) => {
                 state.loading = false;
@@ -447,7 +375,7 @@ const yemekhaneSlice = createSlice({
             })
             .addCase(fetchMenusByDateRange.fulfilled, (state, action) => {
                 state.loading = false;
-                state.monthlyMenus = action.payload || [];
+                state.monthlyMenus = action.payload?.data || action.payload || [];
             })
             .addCase(fetchMenusByDateRange.rejected, (state, action) => {
                 state.loading = false;
@@ -485,9 +413,8 @@ const yemekhaneSlice = createSlice({
                 state.submitting = true;
                 state.error = null;
             })
-            .addCase(deleteMenuItem.fulfilled, (state, action) => {
+            .addCase(deleteMenuItem.fulfilled, (state) => {
                 state.submitting = false;
-                state.menuData = state.menuData.filter((item) => item.id !== action.payload);
                 state.successMessage = 'Menü başarıyla silindi';
             })
             .addCase(deleteMenuItem.rejected, (state, action) => {
@@ -498,131 +425,49 @@ const yemekhaneSlice = createSlice({
             // ========== Arama ==========
             .addCase(searchFood.pending, (state) => {
                 state.searchLoading = true;
+                state.error = null;
             })
             .addCase(searchFood.fulfilled, (state, action) => {
                 state.searchLoading = false;
+                // ✅ FIX: searchFood artık doğrudan sonuç dizisi döndürüyor
                 state.searchResults = action.payload || [];
-                state.showSearchResults = true;
+                state.showSearchResults = (action.payload && action.payload.length > 0);
             })
-            .addCase(searchFood.rejected, (state) => {
+            .addCase(searchFood.rejected, (state, action) => {
                 state.searchLoading = false;
                 state.searchResults = [];
+                state.showSearchResults = false;
+                state.error = action.payload;
             })
 
-            // ========== Excel Import ==========
+            // ========== Excel ==========
             .addCase(importFromExcel.pending, (state) => {
                 state.submitting = true;
                 state.error = null;
             })
             .addCase(importFromExcel.fulfilled, (state) => {
                 state.submitting = false;
-                state.successMessage = 'Excel başarıyla içe aktarıldı';
+                state.successMessage = 'Excel dosyası başarıyla içe aktarıldı';
             })
             .addCase(importFromExcel.rejected, (state, action) => {
                 state.submitting = false;
                 state.error = action.payload;
             })
 
-            // ========== Menü Puanlama ==========
+            // ========== Puanlama ==========
             .addCase(addMenuPoint.pending, (state) => {
                 state.submitting = true;
             })
             .addCase(addMenuPoint.fulfilled, (state) => {
                 state.submitting = false;
-                state.successMessage = 'Puan eklendi';
+                state.successMessage = 'Puanlama başarıyla eklendi';
             })
             .addCase(addMenuPoint.rejected, (state, action) => {
                 state.submitting = false;
                 state.error = action.payload;
             })
 
-            .addCase(updateMenuPoint.pending, (state) => {
-                state.submitting = true;
-            })
-            .addCase(updateMenuPoint.fulfilled, (state) => {
-                state.submitting = false;
-                state.successMessage = 'Puan güncellendi';
-            })
-            .addCase(updateMenuPoint.rejected, (state, action) => {
-                state.submitting = false;
-                state.error = action.payload;
-            })
-
-            .addCase(deleteMenuPoint.pending, (state) => {
-                state.submitting = true;
-            })
-            .addCase(deleteMenuPoint.fulfilled, (state) => {
-                state.submitting = false;
-                state.successMessage = 'Puan silindi';
-            })
-            .addCase(deleteMenuPoint.rejected, (state, action) => {
-                state.submitting = false;
-                state.error = action.payload;
-            })
-
-            // ========== Menü Yorum ==========
-            .addCase(addMenuComment.pending, (state) => {
-                state.submitting = true;
-            })
-            .addCase(addMenuComment.fulfilled, (state) => {
-                state.submitting = false;
-                state.successMessage = 'Yorum eklendi';
-            })
-            .addCase(addMenuComment.rejected, (state, action) => {
-                state.submitting = false;
-                state.error = action.payload;
-            })
-
-            .addCase(updateMenuComment.pending, (state) => {
-                state.submitting = true;
-            })
-            .addCase(updateMenuComment.fulfilled, (state) => {
-                state.submitting = false;
-                state.successMessage = 'Yorum güncellendi';
-            })
-            .addCase(updateMenuComment.rejected, (state, action) => {
-                state.submitting = false;
-                state.error = action.payload;
-            })
-
-            .addCase(deleteMenuComment.pending, (state) => {
-                state.submitting = true;
-            })
-            .addCase(deleteMenuComment.fulfilled, (state) => {
-                state.submitting = false;
-                state.successMessage = 'Yorum silindi';
-            })
-            .addCase(deleteMenuComment.rejected, (state, action) => {
-                state.submitting = false;
-                state.error = action.payload;
-            })
-
-            // ========== Gün Değerlendirme ==========
-            .addCase(addDayPoint.pending, (state) => {
-                state.submitting = true;
-            })
-            .addCase(addDayPoint.fulfilled, (state) => {
-                state.submitting = false;
-                state.successMessage = 'Gün puanı eklendi';
-            })
-            .addCase(addDayPoint.rejected, (state, action) => {
-                state.submitting = false;
-                state.error = action.payload;
-            })
-
-            .addCase(addDayComment.pending, (state) => {
-                state.submitting = true;
-            })
-            .addCase(addDayComment.fulfilled, (state) => {
-                state.submitting = false;
-                state.successMessage = 'Gün yorumu eklendi';
-            })
-            .addCase(addDayComment.rejected, (state, action) => {
-                state.submitting = false;
-                state.error = action.payload;
-            })
-
-            // ========== Raporlar ==========
+            // ========== Raporlama ==========
             .addCase(fetchGeneralStats.pending, (state) => {
                 state.loading = true;
             })
@@ -635,40 +480,16 @@ const yemekhaneSlice = createSlice({
                 state.error = action.payload;
             })
 
-            .addCase(fetchDailyAverages.pending, (state) => {
-                state.loading = true;
-            })
             .addCase(fetchDailyAverages.fulfilled, (state, action) => {
-                state.loading = false;
-                state.dailyAverages = action.payload;
-            })
-            .addCase(fetchDailyAverages.rejected, (state, action) => {
-                state.loading = false;
-                state.error = action.payload;
+                state.dailyAverages = action.payload || [];
             })
 
-            .addCase(fetchMealsByRating.pending, (state) => {
-                state.loading = true;
-            })
             .addCase(fetchMealsByRating.fulfilled, (state, action) => {
-                state.loading = false;
-                state.mealsByRating = action.payload;
-            })
-            .addCase(fetchMealsByRating.rejected, (state, action) => {
-                state.loading = false;
-                state.error = action.payload;
+                state.mealsByRating = action.payload || [];
             })
 
-            .addCase(fetchDashboardSummary.pending, (state) => {
-                state.loading = true;
-            })
             .addCase(fetchDashboardSummary.fulfilled, (state, action) => {
-                state.loading = false;
                 state.dashboardSummary = action.payload;
-            })
-            .addCase(fetchDashboardSummary.rejected, (state, action) => {
-                state.loading = false;
-                state.error = action.payload;
             });
     },
 });

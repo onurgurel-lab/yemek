@@ -4,6 +4,8 @@
  * Kullanıcıların günün genel yemek hizmetini değerlendirmesini sağlar.
  * Sadece bugün için değerlendirme yapılabilir.
  *
+ * ✅ FIX: user.id || user.uId kullanılarak userId uyumsuzluğu giderildi
+ *
  * @module pages/Yemekhane/components/DayEvaluationModal
  */
 
@@ -48,6 +50,10 @@ const { Text, Title } = Typography;
 const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
     const { user } = useAuth();
 
+    // ✅ FIX: userId'yi doğru şekilde al (id veya uId)
+    const userId = user?.id || user?.uId;
+    const userName = user?.userName || user?.fullName || user?.name || 'Kullanıcı';
+
     // State
     const [loading, setLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -78,7 +84,7 @@ const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
 
     // Load existing evaluation
     const loadData = useCallback(async () => {
-        if (!date || !user?.uId) return;
+        if (!date || !userId) return;
 
         setLoading(true);
         try {
@@ -86,8 +92,8 @@ const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
 
             // Load user's existing evaluation for this date
             const [pointsRes, commentsRes] = await Promise.allSettled([
-                dayPointService.getByUser(user.uId),
-                dayCommentService.getByUser(user.uId)
+                dayPointService.getByUser(userId),
+                dayCommentService.getByUser(userId)
             ]);
 
             // Find point for this date
@@ -133,7 +139,7 @@ const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
         } finally {
             setLoading(false);
         }
-    }, [date, user]);
+    }, [date, userId]);
 
     // Load data when modal opens
     useEffect(() => {
@@ -180,8 +186,9 @@ const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
             return;
         }
 
-        if (!user?.uId) {
-            message.error('Kullanıcı bilgisi bulunamadı!');
+        // ✅ FIX: userId kontrolü
+        if (!userId) {
+            message.error('Kullanıcı bilgisi bulunamadı! Lütfen tekrar giriş yapın.');
             return;
         }
 
@@ -200,8 +207,8 @@ const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
                 } else {
                     promises.push(dayPointService.add({
                         pointDate: date,
-                        userName: user.userName || user.name,
-                        uId: user.uId,
+                        userName: userName,
+                        uId: userId,  // ✅ API'nin beklediği alan adı
                         point: userRating
                     }));
                 }
@@ -217,8 +224,8 @@ const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
                 } else {
                     promises.push(dayCommentService.add({
                         commentDate: date,
-                        userName: user.userName || user.name,
-                        uId: user.uId,
+                        userName: userName,
+                        uId: userId,  // ✅ API'nin beklediği alan adı
                         comment: userComment.trim()
                     }));
                 }
@@ -329,95 +336,92 @@ const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
                     />
                 )}
 
-                {/* Değerlendirme Formu */}
-                {canEvaluate && user && (
-                    <>
-                        {/* Puan Verme */}
-                        <div style={{ marginBottom: 24 }}>
-                            <Text strong style={{ display: 'block', marginBottom: 12 }}>
-                                <StarOutlined /> Hizmet Puanı:
-                            </Text>
-                            <div style={{ textAlign: 'center' }}>
-                                <Rate
-                                    value={userRating}
-                                    onChange={handleRatingChange}
-                                    tooltips={Object.values(RATING_DESCRIPTIONS)}
-                                    style={{ fontSize: 36 }}
-                                />
-                                {userRating > 0 && (
-                                    <div style={{ marginTop: 8 }}>
-                                        <Text strong style={{ color: '#faad14', fontSize: 16 }}>
-                                            {RATING_DESCRIPTIONS[userRating]}
-                                        </Text>
-                                    </div>
-                                )}
+                {/* ✅ FIX: Kullanıcı bilgisi yoksa uyarı göster */}
+                {!userId && (
+                    <Alert
+                        message="Giriş Gerekli"
+                        description="Değerlendirme yapabilmek için lütfen giriş yapın."
+                        type="error"
+                        showIcon
+                        style={{ marginBottom: 24 }}
+                    />
+                )}
+
+                {/* Puanlama */}
+                <div style={{ marginBottom: 24 }}>
+                    <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                        <StarOutlined /> Puan Verin
+                    </Text>
+                    <div style={{ textAlign: 'center' }}>
+                        <Rate
+                            value={userRating}
+                            onChange={handleRatingChange}
+                            disabled={!canEvaluate || !userId}
+                            style={{ fontSize: 32 }}
+                        />
+                        {userRating > 0 && (
+                            <div style={{ marginTop: 8 }}>
+                                <Text type="secondary">
+                                    {RATING_DESCRIPTIONS?.[userRating] || `${userRating} Yıldız`}
+                                </Text>
                             </div>
-                        </div>
-
-                        <Divider />
-
-                        {/* Yorum */}
-                        <div style={{ marginBottom: 24 }}>
-                            <Text strong style={{ display: 'block', marginBottom: 12 }}>
-                                Yorumunuz:
-                            </Text>
-                            <TextArea
-                                value={userComment}
-                                onChange={handleCommentChange}
-                                placeholder="Bugünün yemek hizmeti hakkında düşüncelerinizi yazın..."
-                                rows={4}
-                                maxLength={500}
-                                showCount
-                            />
-                        </div>
-
-                        <Divider />
-
-                        {/* Butonlar */}
-                        <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
-                            <Button onClick={onClose} disabled={submitting}>
-                                İptal
-                            </Button>
-
-                            {isEditing && (existingPoint || existingComment) && (
-                                <Popconfirm
-                                    title="Değerlendirmeyi silmek istediğinizden emin misiniz?"
-                                    onConfirm={handleDelete}
-                                    okText="Evet, Sil"
-                                    cancelText="İptal"
-                                    okButtonProps={{ danger: true }}
-                                >
-                                    <Button
-                                        danger
-                                        icon={<DeleteOutlined />}
-                                        loading={submitting}
-                                    >
-                                        Sil
-                                    </Button>
-                                </Popconfirm>
-                            )}
-
-                            <Button
-                                type="primary"
-                                icon={isEditing ? <CheckCircleOutlined /> : <StarOutlined />}
-                                onClick={handleSubmit}
-                                loading={submitting}
-                                disabled={userRating === 0 && !userComment.trim()}
-                            >
-                                {isEditing ? 'Güncelle' : 'Kaydet'}
-                            </Button>
-                        </Space>
-                    </>
-                )}
-
-                {/* Kullanıcı Giriş Yapmamış */}
-                {!user && (
-                    <div style={{ textAlign: 'center', padding: 24 }}>
-                        <Text type="secondary">
-                            Değerlendirme yapabilmek için giriş yapmalısınız.
-                        </Text>
+                        )}
                     </div>
-                )}
+                </div>
+
+                <Divider />
+
+                {/* Yorum */}
+                <div style={{ marginBottom: 24 }}>
+                    <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                        <EditOutlined /> Yorum Yazın (Opsiyonel)
+                    </Text>
+                    <TextArea
+                        value={userComment}
+                        onChange={handleCommentChange}
+                        placeholder="Görüşlerinizi paylaşın..."
+                        rows={4}
+                        maxLength={500}
+                        showCount
+                        disabled={!canEvaluate || !userId}
+                    />
+                </div>
+
+                {/* Butonlar */}
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    {isEditing && (existingPoint || existingComment) && (
+                        <Popconfirm
+                            title="Değerlendirmeyi silmek istediğinize emin misiniz?"
+                            onConfirm={handleDelete}
+                            okText="Evet, Sil"
+                            cancelText="Vazgeç"
+                            okButtonProps={{ danger: true }}
+                        >
+                            <Button
+                                danger
+                                icon={<DeleteOutlined />}
+                                loading={submitting}
+                                disabled={!canEvaluate}
+                            >
+                                Sil
+                            </Button>
+                        </Popconfirm>
+                    )}
+
+                    <Button onClick={onClose}>
+                        İptal
+                    </Button>
+
+                    <Button
+                        type="primary"
+                        icon={<CheckCircleOutlined />}
+                        onClick={handleSubmit}
+                        loading={submitting}
+                        disabled={!canEvaluate || !userId || (userRating === 0 && !userComment.trim())}
+                    >
+                        {isEditing ? 'Güncelle' : 'Kaydet'}
+                    </Button>
+                </div>
             </Spin>
         </Modal>
     );

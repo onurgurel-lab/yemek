@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Card, Tabs, Input, Row, Col, Badge, Tag, Empty, Spin, Button, Typography, Space, Tooltip, Statistic } from 'antd';
-import { SearchOutlined, CalendarOutlined, FireOutlined, LeftOutlined, RightOutlined, StarOutlined } from '@ant-design/icons';
+import { Card, Tabs, Input, Row, Col, Badge, Tag, Empty, Spin, Button, Typography, Space, Tooltip, Statistic, Rate } from 'antd';
+import { SearchOutlined, CalendarOutlined, FireOutlined, LeftOutlined, RightOutlined, StarOutlined, StarFilled } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
@@ -40,7 +40,7 @@ import {
     isToday as checkIsToday,
     getDefaultMealTab
 } from '@/constants/mealMenuApi';
-import { dayPointService } from '@/services/evaluationService';
+import { menuPointService, dayPointService } from '@/services/evaluationService';
 import MenuRating from '@/pages/Yemekhane/components/MenuRating';
 import DayEvaluationModal from '@/pages/Yemekhane/components/DayEvaluationModal';
 import WeeklyMenuModal from '@/pages/Yemekhane/components/WeeklyMenuModal';
@@ -58,6 +58,7 @@ const { Search } = Input;
  *
  * Sol tarafta takvim, sağ tarafta günlük menü görünümü.
  * Öğle ve akşam yemeği tabları, arama, değerlendirme özellikleri içerir.
+ * Her yemek yanında ortalama puan ve değerlendirme butonu gösterilir.
  *
  * @returns {JSX.Element} Dashboard
  */
@@ -85,35 +86,114 @@ const Dashboard = () => {
     const [showRatingModal, setShowRatingModal] = useState(false);
     const [hasExistingEvaluation, setHasExistingEvaluation] = useState(false);
 
+    // ✅ Yemek puanları için state
+    const [menuRatings, setMenuRatings] = useState({}); // { menuId: { average, count, userRating } }
+    const [ratingsLoading, setRatingsLoading] = useState(false);
+
     // Refs for preventing infinite loops
     const isInitializedRef = useRef(false);
     const previousDateRef = useRef(null);
 
+    // ✅ FIX: userId'yi doğru şekilde al (id veya uId)
+    const userId = user?.id || user?.uId;
+    const userName = user?.userName || user?.fullName || user?.name || 'Kullanıcı';
+
+    /**
+     * Tüm menü itemları için puan bilgilerini yükle
+     * Eski koddaki loadExistingData mantığı
+     */
+    const loadMenuRatings = useCallback(async (menuItems) => {
+        if (!menuItems || menuItems.length === 0) return;
+
+        setRatingsLoading(true);
+        try {
+            const ratings = {};
+
+            // Kullanıcının tüm puanlarını bir kerede çek
+            let userPoints = [];
+            if (userId) {
+                try {
+                    const userPointsResponse = await menuPointService.getByUser(userId);
+                    userPoints = userPointsResponse?.data || userPointsResponse || [];
+                    if (!Array.isArray(userPoints)) userPoints = [];
+                } catch (error) {
+                    console.error('Kullanıcı puanları yüklenemedi:', error);
+                }
+            }
+
+            // Her menü item için puan bilgilerini çek
+            for (const item of menuItems) {
+                try {
+                    // Menüye ait tüm puanları çek
+                    const pointsResponse = await menuPointService.getByMenuId(item.id);
+                    const points = pointsResponse?.data || pointsResponse || [];
+                    const pointsArray = Array.isArray(points) ? points : [];
+
+                    // Ortalama hesapla
+                    let average = 0;
+                    if (pointsArray.length > 0) {
+                        const sum = pointsArray.reduce((acc, p) => acc + (p.point || 0), 0);
+                        average = Math.round((sum / pointsArray.length) * 10) / 10;
+                    }
+
+                    // Kullanıcının bu yemeğe verdiği puanı bul
+                    const userRating = userPoints.find(p => p.mealMenuId === item.id);
+
+                    ratings[item.id] = {
+                        average: average,
+                        count: pointsArray.length,
+                        userRating: userRating?.point || 0,
+                        userPointId: userRating?.id || null,
+                        hasUserRated: !!userRating
+                    };
+                } catch (error) {
+                    console.error(`Menü ${item.id} için puan yüklenemedi:`, error);
+                    ratings[item.id] = { average: 0, count: 0, userRating: 0, hasUserRated: false };
+                }
+            }
+
+            setMenuRatings(ratings);
+        } catch (error) {
+            console.error('Puan bilgileri yüklenirken hata:', error);
+        } finally {
+            setRatingsLoading(false);
+        }
+    }, [userId]);
+
     // Check if user has existing evaluation for a specific date
     const checkExistingEvaluation = useCallback(async (dateToCheck) => {
-        if (!user?.uId || !dateToCheck) {
+        if (!userId || !dateToCheck) {
             setHasExistingEvaluation(false);
             return;
         }
 
         try {
-            const response = await dayPointService.getByDate(dateToCheck);
-            const points = response?.data || [];
-            const userPoint = points.find(p => p.uId === user.uId);
+            const response = await dayPointService.getByUser(userId);
+            const points = response?.data || response || [];
+            const pointsArray = Array.isArray(points) ? points : [];
+
+            const formattedDate = dayjs(dateToCheck).format('YYYY-MM-DD');
+            const userPoint = pointsArray.find(p => {
+                const pointDate = dayjs(p.pointDate).format('YYYY-MM-DD');
+                return pointDate === formattedDate;
+            });
+
             setHasExistingEvaluation(!!userPoint);
         } catch (error) {
+            console.error('Değerlendirme kontrolü hatası:', error);
             setHasExistingEvaluation(false);
         }
-    }, [user?.uId]);
+    }, [userId]);
 
-    // Initialize - runs only once on mount
+    // Initialize on mount - runs only once
     useEffect(() => {
         if (isInitializedRef.current) return;
+        isInitializedRef.current = true;
 
         const today = dayjs().format('YYYY-MM-DD');
         const month = dayjs().format('YYYY-MM');
 
-        // Set initial values
+        // Set initial state
         dispatch(setSelectedDate(today));
         dispatch(setCurrentMonth(month));
         dispatch(setActiveTab(getDefaultMealTab()));
@@ -121,54 +201,54 @@ const Dashboard = () => {
         // Fetch today's menu
         dispatch(fetchTodayMenu());
 
-        // Check evaluation for today
+        // Check evaluation
         checkExistingEvaluation(today);
-
-        // Mark as initialized and store the initial date
-        previousDateRef.current = today;
-        isInitializedRef.current = true;
     }, [dispatch, checkExistingEvaluation]);
 
-    // Load menu when date changes (only for user-initiated changes)
+    // Fetch menu when date changes (but not on initial mount)
     useEffect(() => {
-        // Skip if not initialized yet
-        if (!isInitializedRef.current) return;
+        if (!selectedDate || !isInitializedRef.current) return;
 
-        // Skip if date hasn't actually changed
-        if (!selectedDate || selectedDate === previousDateRef.current) return;
-
-        // Update previous date ref
+        // Skip if same date
+        if (previousDateRef.current === selectedDate) return;
         previousDateRef.current = selectedDate;
 
-        // Fetch menu for the new date
         dispatch(fetchMenuByDate(selectedDate));
-
-        // Check evaluation for the new date
         checkExistingEvaluation(selectedDate);
     }, [selectedDate, dispatch, checkExistingEvaluation]);
+
+    // ✅ Menü verisi değiştiğinde puanları yükle
+    useEffect(() => {
+        if (menuData && menuData.length > 0) {
+            loadMenuRatings(menuData);
+        }
+    }, [menuData, loadMenuRatings]);
 
     // Generate calendar days (42 days for 6 weeks)
     const calendarDays = useMemo(() => {
         const days = [];
         const monthStart = dayjs(currentMonth + '-01');
 
-        // Start from Monday of the week containing the 1st
-        let startDay = monthStart.startOf('week');
-        if (monthStart.day() === 0) {
-            startDay = startDay.subtract(6, 'day');
-        } else {
-            startDay = startDay.add(1, 'day');
-        }
+        // Ayın ilk gününün haftanın hangi günü olduğunu bul
+        // dayjs.day(): 0=Pazar, 1=Pazartesi, ..., 6=Cumartesi
+        // Biz Pazartesi=0, Salı=1, ..., Pazar=6 istiyoruz
+        const firstDayOfWeek = monthStart.day(); // 0-6 (Pazar-Cumartesi)
+        const mondayBasedDay = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1; // Pazartesi=0 bazlı
+
+        // Grid'in başlangıcı: ayın 1'inden önceki Pazartesi
+        const startDay = monthStart.subtract(mondayBasedDay, 'day');
 
         for (let i = 0; i < 42; i++) {
             const date = startDay.add(i, 'day');
+            const dayOfWeek = date.day(); // 0=Pazar, 6=Cumartesi
+
             days.push({
                 date: date.format('YYYY-MM-DD'),
                 day: date.date(),
                 isCurrentMonth: date.month() === monthStart.month(),
                 isToday: date.isSame(dayjs(), 'day'),
                 isSelected: date.format('YYYY-MM-DD') === selectedDate,
-                isWeekend: date.day() === 0 || date.day() === 6
+                isWeekend: dayOfWeek === 0 || dayOfWeek === 6 // Pazar veya Cumartesi
             });
         }
 
@@ -206,7 +286,7 @@ const Dashboard = () => {
 
     // Calculate total calories
     const totalCalories = useMemo(() => {
-        return filteredMenu.reduce((total, item) => total + (item.calorie || 0), 0);
+        return filteredMenu.reduce((total, item) => total + (item.calories || item.calorie || 0), 0);
     }, [filteredMenu]);
 
     // Navigation
@@ -234,7 +314,7 @@ const Dashboard = () => {
     // Search handling
     const handleSearch = useCallback((value) => {
         dispatch(setSearchTerm(value));
-        if (value.trim().length >= 2) {
+        if (value && value.trim().length >= 2) {
             dispatch(searchFood(value.trim()));
         } else {
             dispatch(clearSearchResults());
@@ -266,7 +346,11 @@ const Dashboard = () => {
         if (selectedDate) {
             dispatch(fetchMenuByDate(selectedDate));
         }
-    }, [dispatch, selectedDate]);
+        // Puanları yeniden yükle
+        if (menuData && menuData.length > 0) {
+            loadMenuRatings(menuData);
+        }
+    }, [dispatch, selectedDate, menuData, loadMenuRatings]);
 
     // Handle day evaluation update
     const handleEvaluationUpdate = useCallback(() => {
@@ -291,10 +375,59 @@ const Dashboard = () => {
         return dayjs(selectedDate).format('DD MMMM YYYY dddd');
     }, [selectedDate]);
 
+    // MonthlyMenuModal için year ve month değerlerini hesapla
+    const monthlyModalYear = useMemo(() => {
+        return dayjs(currentMonth + '-01').year();
+    }, [currentMonth]);
+
+    const monthlyModalMonth = useMemo(() => {
+        return dayjs(currentMonth + '-01').month(); // 0-11 indeksli
+    }, [currentMonth]);
+
+    // Tab items
     const tabItems = [
         { key: 'lunch', label: '🍽️ Öğle Yemeği' },
         { key: 'dinner', label: '🌙 Akşam Yemeği' }
     ];
+
+    /**
+     * Yemek için puan bilgisini al
+     * @param {number} menuId - Menü ID
+     * @returns {Object} { average, count, userRating, hasUserRated }
+     */
+    const getMenuRatingInfo = useCallback((menuId) => {
+        return menuRatings[menuId] || { average: 0, count: 0, userRating: 0, hasUserRated: false };
+    }, [menuRatings]);
+
+    /**
+     * Yıldız render fonksiyonu (eski koddaki gibi)
+     */
+    const renderStars = useCallback((rating) => {
+        return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                    <span
+                        key={star}
+                        style={{
+                            color: star <= rating ? '#faad14' : '#d9d9d9',
+                            fontSize: 14
+                        }}
+                    >
+                        ★
+                    </span>
+                ))}
+            </div>
+        );
+    }, []);
+
+    /**
+     * Buton metnini belirle (eski koddaki gibi)
+     */
+    const getButtonText = useCallback((hasUserRated, isToday) => {
+        if (!isToday && hasUserRated) return 'Değerlendirildi';
+        if (isToday && hasUserRated) return 'Düzenle';
+        return 'Değerlendir';
+    }, []);
 
     return (
         <div style={{ padding: '24px' }}>
@@ -354,12 +487,12 @@ const Dashboard = () => {
                                         color: day.isSelected
                                             ? '#fff'
                                             : !day.isCurrentMonth
-                                                ? '#bfbfbf'
+                                                ? '#d9d9d9'
                                                 : day.isWeekend
-                                                    ? '#fa8c16'
+                                                    ? '#ff4d4f'
                                                     : '#000',
-                                        fontWeight: day.isToday ? 'bold' : 'normal',
-                                        border: day.isToday && !day.isSelected ? '1px solid #1890ff' : 'none'
+                                        border: day.isToday && !day.isSelected ? '1px solid #1890ff' : 'none',
+                                        fontWeight: day.isToday ? 'bold' : 'normal'
                                     }}
                                 >
                                     {day.day}
@@ -367,23 +500,21 @@ const Dashboard = () => {
                             ))}
                         </div>
 
-                        {/* Quick Actions */}
-                        <Space style={{ marginTop: 16, width: '100%' }} direction="vertical">
+                        {/* View Mode Buttons */}
+                        <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
                             <Button
                                 block
-                                icon={<CalendarOutlined />}
                                 onClick={() => dispatch(toggleWeeklyPopup())}
                             >
-                                Haftalık Görünüm
+                                📅 Haftalık
                             </Button>
                             <Button
                                 block
-                                icon={<CalendarOutlined />}
                                 onClick={() => dispatch(toggleMonthlyPopup())}
                             >
-                                Aylık Görünüm
+                                🗓️ Aylık
                             </Button>
-                        </Space>
+                        </div>
                     </Card>
                 </Col>
 
@@ -393,6 +524,7 @@ const Dashboard = () => {
                         {/* Search */}
                         <Search
                             placeholder="Yemek ara..."
+                            prefix={<SearchOutlined />}
                             allowClear
                             value={searchTerm}
                             onChange={(e) => handleSearch(e.target.value)}
@@ -401,7 +533,7 @@ const Dashboard = () => {
                         />
 
                         {/* Search Results */}
-                        {showSearchResults && searchResults.length > 0 && (
+                        {showSearchResults && searchResults && searchResults.length > 0 && (
                             <div style={{
                                 marginBottom: 16,
                                 padding: 12,
@@ -419,13 +551,13 @@ const Dashboard = () => {
                                             cursor: 'pointer',
                                             borderBottom: '1px dashed #f0f0f0'
                                         }}
-                                        onClick={() => goToDateFromSearch(item.menuDate)}
+                                        onClick={() => goToDateFromSearch(item.menuDate || item.date)}
                                     >
                                         <Space>
                                             <Tag color={getCategoryColor(item.category)}>{item.category}</Tag>
                                             <span>{item.foodName}</span>
                                             <Text type="secondary">
-                                                {dayjs(item.menuDate).format('DD.MM.YYYY')}
+                                                {dayjs(item.menuDate || item.date).format('DD.MM.YYYY')}
                                             </Text>
                                         </Space>
                                     </div>
@@ -455,74 +587,149 @@ const Dashboard = () => {
                             <div style={{ textAlign: 'center', padding: 40 }}>
                                 <Spin size="large" />
                             </div>
-                        ) : filteredMenu.length === 0 ? (
+                        ) : groupedMenu.length === 0 ? (
                             <Empty description="Bu tarih için menü bulunamadı" />
                         ) : (
                             <>
-                                {groupedMenu.map(([category, items]) => (
-                                    <div key={category} style={{ marginBottom: 16 }}>
-                                        <Tag
-                                            color={getCategoryColor(category)}
-                                            style={{ marginBottom: 8, padding: '4px 12px' }}
-                                        >
-                                            {getCategoryIcon(category)} {category}
-                                        </Tag>
-                                        {items.map((item) => (
-                                            <Card
-                                                key={item.id}
-                                                size="small"
-                                                style={{ marginBottom: 8 }}
-                                                hoverable
-                                                onClick={() => openRatingModal(item)}
-                                            >
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <Space>
-                                                        <Text>{item.foodName}</Text>
-                                                        {item.averageRating > 0 && (
-                                                            <Tooltip title={`Ortalama: ${item.averageRating.toFixed(1)}`}>
-                                                                <Tag color="gold">
-                                                                    <StarOutlined /> {item.averageRating.toFixed(1)}
-                                                                </Tag>
-                                                            </Tooltip>
-                                                        )}
-                                                    </Space>
-                                                    {item.calorie > 0 && (
-                                                        <Text type="secondary">
-                                                            <FireOutlined style={{ color: '#fa8c16' }} /> {item.calorie} kcal
-                                                        </Text>
-                                                    )}
-                                                </div>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                ))}
-
-                                {/* Total Calories */}
-                                {totalCalories > 0 && (
-                                    <div style={{
-                                        marginTop: 16,
-                                        padding: 12,
-                                        background: '#fff7e6',
-                                        borderRadius: 8,
-                                        textAlign: 'center'
-                                    }}>
+                                {/* Stats */}
+                                <div style={{
+                                    display: 'flex',
+                                    gap: 24,
+                                    marginBottom: 16,
+                                    padding: 12,
+                                    background: '#fafafa',
+                                    borderRadius: 8
+                                }}>
+                                    <Statistic
+                                        title="Toplam Yemek"
+                                        value={filteredMenu.length}
+                                        suffix="çeşit"
+                                    />
+                                    {totalCalories > 0 && (
                                         <Statistic
                                             title="Toplam Kalori"
                                             value={totalCalories}
                                             suffix="kcal"
-                                            prefix={<FireOutlined style={{ color: '#fa8c16' }} />}
+                                            prefix={<FireOutlined style={{ color: '#ff4d4f' }} />}
                                         />
-                                    </div>
-                                )}
+                                    )}
+                                </div>
 
-                                {/* Day Evaluation Button */}
-                                {isTodaySelected && (
+                                {/* Menu Items by Category */}
+                                <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))' }}>
+                                    {groupedMenu.map(([category, items]) => (
+                                        <Card
+                                            key={category}
+                                            size="small"
+                                            title={
+                                                <Space>
+                                                    <span>{getCategoryIcon(category)}</span>
+                                                    <span>{category}</span>
+                                                    <Badge count={items.length} style={{ backgroundColor: getCategoryColor(category) }} />
+                                                </Space>
+                                            }
+                                        >
+                                            {items.map((item, idx) => {
+                                                const ratingInfo = getMenuRatingInfo(item.id);
+                                                const buttonText = getButtonText(ratingInfo.hasUserRated, isTodaySelected);
+
+                                                return (
+                                                    <div
+                                                        key={item.id || idx}
+                                                        style={{
+                                                            padding: '12px 0',
+                                                            borderBottom: idx < items.length - 1 ? '1px dashed #f0f0f0' : 'none',
+                                                        }}
+                                                    >
+                                                        {/* Yemek Adı ve Kalori */}
+                                                        <div style={{ marginBottom: 8 }}>
+                                                            <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 4 }}>
+                                                                {item.foodName}
+                                                            </Text>
+
+                                                            {/* Kalori */}
+                                                            {(item.calories || item.calorie) > 0 && (
+                                                                <Tag icon={<FireOutlined />} color="orange" size="small">
+                                                                    {item.calories || item.calorie} kcal
+                                                                </Tag>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Puan ve Değerlendirme Butonu - Her zaman alt satırda */}
+                                                        <div style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'space-between',
+                                                            flexWrap: 'wrap',
+                                                            gap: 8
+                                                        }}>
+                                                            {/* Yıldız Ortalaması ve Oy Sayısı */}
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                                {ratingsLoading ? (
+                                                                    <Spin size="small" />
+                                                                ) : (
+                                                                    <>
+                                                                        {renderStars(Math.round(ratingInfo.average))}
+                                                                        <Text
+                                                                            type="secondary"
+                                                                            style={{ fontSize: 12 }}
+                                                                        >
+                                                                            {ratingInfo.average > 0 ? (
+                                                                                <>
+                                                                                    <Text strong style={{ color: '#faad14' }}>
+                                                                                        {ratingInfo.average}
+                                                                                    </Text>
+                                                                                    {' '}({ratingInfo.count})
+                                                                                </>
+                                                                            ) : (
+                                                                                <span style={{ color: '#bfbfbf' }}>Henüz oy yok</span>
+                                                                            )}
+                                                                        </Text>
+                                                                    </>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Değerlendirme Butonu */}
+                                                            <Tooltip
+                                                                title={
+                                                                    !isTodaySelected
+                                                                        ? 'Geçmiş tarihlerdeki menülere değerlendirme yapılamaz'
+                                                                        : ratingInfo.hasUserRated
+                                                                            ? 'Değerlendirmeyi düzenle'
+                                                                            : 'Puan ver ve yorum yap'
+                                                                }
+                                                            >
+                                                                <Button
+                                                                    type={ratingInfo.hasUserRated ? 'primary' : 'default'}
+                                                                    size="small"
+                                                                    icon={<span style={{ marginRight: 4 }}>⭐</span>}
+                                                                    onClick={() => openRatingModal(item)}
+                                                                    disabled={!isTodaySelected}
+                                                                    style={{
+                                                                        borderColor: isTodaySelected && !ratingInfo.hasUserRated ? '#faad14' : undefined,
+                                                                        color: isTodaySelected && !ratingInfo.hasUserRated ? '#faad14' : undefined,
+                                                                        opacity: !isTodaySelected ? 0.6 : 1
+                                                                    }}
+                                                                >
+                                                                    {buttonText}
+                                                                </Button>
+                                                            </Tooltip>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </Card>
+                                    ))}
+                                </div>
+
+                                {/* Day Evaluation Button - Only for today */}
+                                {isTodaySelected && userId && (
                                     <Button
-                                        type="primary"
-                                        block
-                                        style={{ marginTop: 16 }}
+                                        type={hasExistingEvaluation ? 'default' : 'primary'}
                                         icon={<StarOutlined />}
                                         onClick={() => dispatch(toggleDayEvaluationPopup())}
+                                        style={{ marginTop: 16 }}
+                                        block
                                     >
                                         {hasExistingEvaluation ? 'Gün Değerlendirmesini Düzenle' : 'Günü Değerlendir'}
                                     </Button>
@@ -554,10 +761,12 @@ const Dashboard = () => {
                 startDate={selectedDate}
             />
 
+            {/* MonthlyMenuModal'a year ve month ayrı ayrı gönder */}
             <MonthlyMenuModal
                 visible={showMonthlyPopup}
                 onClose={() => dispatch(toggleMonthlyPopup())}
-                month={currentMonth}
+                year={monthlyModalYear}
+                month={monthlyModalMonth}
             />
         </div>
     );

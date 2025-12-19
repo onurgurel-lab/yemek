@@ -101,9 +101,18 @@ export const getMenusByDateRange = async (startDate, endDate) => {
 
 /**
  * Yemek adına göre arama yapar
+ * ✅ FIX: Bu fonksiyon artık doğrudan export ediliyor
+ *
+ * @param {string} searchTerm - Aranacak yemek adı
+ * @param {string} [month] - Opsiyonel ay filtresi (YYYY-MM formatı)
+ * @returns {Promise<Array>} Arama sonuçları
  */
-export const searchFoodByName = async (searchTerm, month) => {
+export const searchFood = async (searchTerm, month) => {
     try {
+        if (!searchTerm || searchTerm.trim().length < 2) {
+            return [];
+        }
+
         // Eğer month parametresi varsa, o ayın menülerinde ara
         let menus;
         if (month) {
@@ -118,33 +127,27 @@ export const searchFoodByName = async (searchTerm, month) => {
 
         if (!Array.isArray(menuData)) return [];
 
-        // Yemek adına göre filtrele
+        // Yemek adına göre filtrele (case-insensitive)
+        const normalizedSearchTerm = searchTerm.toLowerCase().trim();
         const filteredMenus = menuData.filter(menu =>
-            menu.foodName?.toLowerCase().includes(searchTerm.toLowerCase())
+            menu.foodName?.toLowerCase().includes(normalizedSearchTerm)
         );
 
-        // Tarihe göre grupla
-        const groupedByDate = filteredMenus.reduce((acc, menu) => {
-            const menuDate = new Date(menu.menuDate).toISOString().split('T')[0];
-            if (!acc[menuDate]) {
-                acc[menuDate] = [];
-            }
-            acc[menuDate].push(menu);
-            return acc;
-        }, {});
+        // Sonuçları tarihe göre sırala (en yeni önce)
+        const sortedResults = filteredMenus.sort((a, b) =>
+            new Date(b.menuDate) - new Date(a.menuDate)
+        );
 
-        // Sonuçları dönüştür
-        return Object.keys(groupedByDate)
-            .sort((a, b) => new Date(b) - new Date(a))
-            .map(date => ({
-                date,
-                menus: groupedByDate[date]
-            }));
+        // İlk 50 sonucu döndür (performans için)
+        return sortedResults.slice(0, 50);
     } catch (error) {
         console.error('Yemek araması hatası:', error);
         return [];
     }
 };
+
+// Alias: Geriye uyumluluk için
+export const searchFoodByName = searchFood;
 
 // ==================== YARDIMCI FONKSİYONLAR ====================
 
@@ -203,7 +206,7 @@ export const groupMenusByMealTime = (menuItems) => {
  */
 export const calculateTotalCalories = (menuItems) => {
     if (!Array.isArray(menuItems)) return 0;
-    return menuItems.reduce((total, item) => total + (item.calorie || 0), 0);
+    return menuItems.reduce((total, item) => total + (item.calories || item.calorie || 0), 0);
 };
 
 /**
@@ -216,7 +219,7 @@ export const formatMenuData = (rawData) => {
         id: rawData.id,
         foodName: rawData.foodName,
         category: rawData.category,
-        calorie: rawData.calorie || 0,
+        calories: rawData.calories || rawData.calorie || 0,
         menuDate: rawData.menuDate,
         mealTime: rawData.mealTime,
         createdAt: rawData.createdAt,
@@ -268,7 +271,8 @@ const mealMenuService = {
     // Sorgulama
     getMenusByMonth,
     getMenusByDateRange,
-    searchFoodByName,
+    searchFood,           // ✅ FIX: Artık doğru isimle export
+    searchFoodByName,     // Alias (geriye uyumluluk)
 
     // Yardımcı
     groupMenusByCategory,
