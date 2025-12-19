@@ -1,366 +1,449 @@
+/**
+ * MonthlyMenuModal.jsx - Aylık Menü Modal
+ *
+ * Bir ayın menüsünü takvim görünümünde öğle/akşam sekmeli olarak görüntüler.
+ *
+ * @module pages/Yemekhane/components/MonthlyMenuModal
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { Modal, Tabs, Card, Tag, Empty, Spin, Typography, Tooltip, Badge } from 'antd';
-import { CalendarOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
-import mealMenuService from '@/services/mealMenuService';
-import { MEAL_TIMES, DAY_NAMES, MONTH_NAMES, getCategoryColor } from '@/constants/mealMenuApi';
+import {
+    Modal,
+    Tabs,
+    Card,
+    Tag,
+    Empty,
+    Spin,
+    Typography,
+    Badge,
+    Tooltip,
+    Popover
+} from 'antd';
+import {
+    CalendarOutlined,
+    FireOutlined
+} from '@ant-design/icons';
+import * as mealMenuService from '@/services/mealMenuService';
+import {
+    MEAL_TIMES,
+    CATEGORY_ORDER,
+    MONTH_NAMES,
+    getCategoryColor,
+    getCategoryIcon
+} from '@/constants/mealMenuApi';
 import dayjs from 'dayjs';
 import 'dayjs/locale/tr';
 
 dayjs.locale('tr');
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
-const MonthlyMenuModal = ({ visible, onClose, month }) => {
+/**
+ * MonthlyMenuModal - Aylık Menü Modal
+ *
+ * @param {Object} props
+ * @param {boolean} props.visible - Modal görünürlüğü
+ * @param {Function} props.onClose - Modal kapatma
+ * @param {number} props.year - Yıl
+ * @param {number} props.month - Ay (0-11)
+ */
+const MonthlyMenuModal = ({ visible, onClose, year, month }) => {
     const [loading, setLoading] = useState(false);
-    const [monthData, setMonthData] = useState({});
+    const [monthData, setMonthData] = useState([]);
     const [activeTab, setActiveTab] = useState('lunch');
-    const [currentMonth, setCurrentMonth] = useState(month || dayjs().format('YYYY-MM'));
 
-    // Generate calendar grid (42 days for 6 weeks)
-    const generateCalendarDays = useCallback(() => {
+    // Get month days with padding for calendar view
+    const getMonthDays = useCallback((year, month) => {
         const days = [];
-        const monthStart = dayjs(currentMonth + '-01');
-        const monthEnd = monthStart.endOf('month');
+        const firstDay = dayjs(new Date(year, month, 1));
+        const lastDay = dayjs(new Date(year, month + 1, 0));
 
-        // Start from Monday of the week containing the 1st
-        let startDay = monthStart.startOf('week');
-        if (monthStart.day() === 0) {
-            startDay = startDay.subtract(6, 'day');
-        } else {
-            startDay = startDay.add(1, 'day');
+        // Get Monday offset
+        const dayOfWeek = firstDay.day();
+        const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+        // Add previous month's days
+        for (let i = mondayOffset - 1; i >= 0; i--) {
+            const prevDate = firstDay.subtract(i + 1, 'day');
+            days.push({
+                date: prevDate.format('YYYY-MM-DD'),
+                dayNumber: prevDate.date(),
+                isCurrentMonth: false,
+                isToday: prevDate.isSame(dayjs(), 'day')
+            });
         }
 
-        // Generate 42 days (6 weeks)
-        for (let i = 0; i < 42; i++) {
-            const date = startDay.add(i, 'day');
+        // Add current month's days
+        for (let day = 1; day <= lastDay.date(); day++) {
+            const currentDate = dayjs(new Date(year, month, day));
             days.push({
-                date: date.format('YYYY-MM-DD'),
-                dayNumber: date.format('D'),
-                isCurrentMonth: date.month() === monthStart.month(),
-                isToday: date.isSame(dayjs(), 'day'),
-                isWeekend: date.day() === 0 || date.day() === 6
+                date: currentDate.format('YYYY-MM-DD'),
+                dayNumber: day,
+                isCurrentMonth: true,
+                isToday: currentDate.isSame(dayjs(), 'day'),
+                isWeekend: currentDate.day() === 0 || currentDate.day() === 6
+            });
+        }
+
+        // Add next month's days to complete the grid
+        const remainingDays = 42 - days.length;
+        for (let day = 1; day <= remainingDays; day++) {
+            const nextDate = lastDay.add(day, 'day');
+            days.push({
+                date: nextDate.format('YYYY-MM-DD'),
+                dayNumber: day,
+                isCurrentMonth: false,
+                isToday: nextDate.isSame(dayjs(), 'day')
             });
         }
 
         return days;
-    }, [currentMonth]);
+    }, []);
+
+    // Group menu by category
+    const groupMenuByCategory = useCallback((menu) => {
+        if (!Array.isArray(menu) || menu.length === 0) return {};
+
+        const grouped = menu.reduce((acc, item) => {
+            const category = item.category || 'Diğer';
+            const normalizedCategory = category.toLowerCase().trim();
+            const matchedCategory = CATEGORY_ORDER.find(
+                cat => cat.toLowerCase() === normalizedCategory
+            ) || 'Diğer';
+
+            if (!acc[matchedCategory]) {
+                acc[matchedCategory] = [];
+            }
+            acc[matchedCategory].push(item);
+            return acc;
+        }, {});
+
+        // Sort by category order
+        const sortedGrouped = {};
+        CATEGORY_ORDER.forEach(category => {
+            if (grouped[category]) {
+                sortedGrouped[category] = grouped[category];
+            }
+        });
+
+        Object.keys(grouped).forEach(category => {
+            if (!sortedGrouped[category]) {
+                sortedGrouped[category] = grouped[category];
+            }
+        });
+
+        return sortedGrouped;
+    }, []);
 
     // Load month data
     const loadMonthData = useCallback(async () => {
-        if (!currentMonth) return;
+        if (year === undefined || month === undefined) return;
 
         setLoading(true);
         try {
-            const calendarDays = generateCalendarDays();
-            const startDate = calendarDays[0].date;
-            const endDate = calendarDays[calendarDays.length - 1].date;
+            const startDate = dayjs(new Date(year, month, 1)).format('YYYY-MM-DD');
+            const endDate = dayjs(new Date(year, month + 1, 0)).format('YYYY-MM-DD');
 
             const response = await mealMenuService.getMenusByDateRange(startDate, endDate);
-            const menus = response?.data || [];
+            const menus = response?.data || response || [];
 
-            // Group by date
-            const grouped = {};
-            calendarDays.forEach(day => {
-                grouped[day.date] = {
-                    lunch: [],
-                    dinner: []
+            // Get all month days
+            const monthDays = getMonthDays(year, month);
+
+            // Group menus by date
+            const monthDataWithMenus = monthDays.map(day => {
+                const dayMenus = menus.filter(menu => {
+                    const menuDate = dayjs(menu.menuDate).format('YYYY-MM-DD');
+                    return menuDate === day.date;
+                });
+
+                return {
+                    ...day,
+                    lunch: dayMenus.filter(m => m.mealTime === MEAL_TIMES.LUNCH),
+                    dinner: dayMenus.filter(m => m.mealTime === MEAL_TIMES.DINNER)
                 };
             });
 
-            menus.forEach(menu => {
-                const menuDate = dayjs(menu.menuDate).format('YYYY-MM-DD');
-                if (grouped[menuDate]) {
-                    if (menu.mealTime === MEAL_TIMES.LUNCH) {
-                        grouped[menuDate].lunch.push(menu);
-                    } else if (menu.mealTime === MEAL_TIMES.DINNER) {
-                        grouped[menuDate].dinner.push(menu);
-                    }
-                }
-            });
-
-            setMonthData(grouped);
+            setMonthData(monthDataWithMenus);
         } catch (error) {
             console.error('Aylık menü yüklenirken hata:', error);
         } finally {
             setLoading(false);
         }
-    }, [currentMonth, generateCalendarDays]);
+    }, [year, month, getMonthDays]);
 
+    // Load data when modal opens
     useEffect(() => {
-        if (visible) {
-            setCurrentMonth(month || dayjs().format('YYYY-MM'));
-        }
-    }, [visible, month]);
-
-    useEffect(() => {
-        if (visible && currentMonth) {
+        if (visible && year !== undefined && month !== undefined) {
             loadMonthData();
         }
-    }, [visible, currentMonth, loadMonthData]);
+    }, [visible, year, month, loadMonthData]);
 
-    // Navigation
-    const goToPrevMonth = () => {
-        setCurrentMonth(dayjs(currentMonth + '-01').subtract(1, 'month').format('YYYY-MM'));
-    };
+    // Render day cell content
+    const renderDayContent = (day, mealType) => {
+        const menus = mealType === 'lunch' ? day.lunch : day.dinner;
+        const groupedMenu = groupMenuByCategory(menus);
+        const categories = Object.keys(groupedMenu);
 
-    const goToNextMonth = () => {
-        setCurrentMonth(dayjs(currentMonth + '-01').add(1, 'month').format('YYYY-MM'));
-    };
+        if (!day.isCurrentMonth) {
+            return <div className="other-month-day">-</div>;
+        }
 
-    // Get month title
-    const getMonthTitle = () => {
-        const monthDate = dayjs(currentMonth + '-01');
-        const monthIndex = monthDate.month();
-        const year = monthDate.year();
-        return `${MONTH_NAMES[monthIndex]} ${year}`;
-    };
+        if (menus.length === 0) {
+            return <div className="no-menu-day">Menü yok</div>;
+        }
 
-    // Get category summary for a day
-    const getCategorySummary = (items) => {
-        const categories = {};
-        items.forEach(item => {
-            const cat = item.category || 'Diğer';
-            categories[cat] = (categories[cat] || 0) + 1;
-        });
-        return Object.entries(categories);
-    };
+        const totalCalories = menus.reduce((sum, m) => sum + (m.calorie || 0), 0);
 
-    // Build tooltip content
-    const buildTooltipContent = (items) => {
-        if (items.length === 0) return null;
-
-        return (
-            <div style={{ maxWidth: 200 }}>
-                {items.map((item, idx) => (
-                    <div key={item.id || idx} style={{ padding: '2px 0' }}>
-                        <Tag color={getCategoryColor(item.category)} style={{ fontSize: 10, marginRight: 4 }}>
-                            {item.category}
-                        </Tag>
-                        <span style={{ fontSize: 11 }}>{item.foodName}</span>
+        // Popover content for detailed view
+        const popoverContent = (
+            <div style={{ maxWidth: 300 }}>
+                {categories.map(category => (
+                    <div key={category} style={{ marginBottom: 8 }}>
+                        <Text type="secondary" strong>
+                            {getCategoryIcon(category)} {category}
+                        </Text>
+                        <div>
+                            {groupedMenu[category].map(item => (
+                                <div key={item.id} style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    padding: '2px 0'
+                                }}>
+                                    <Text style={{ fontSize: 12 }}>{item.foodName}</Text>
+                                    <Tag color="orange" style={{ fontSize: 10 }}>
+                                        {item.calorie || 0} kcal
+                                    </Tag>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 ))}
             </div>
         );
-    };
-
-    const calendarDays = generateCalendarDays();
-    const mealKey = activeTab === 'lunch' ? 'lunch' : 'dinner';
-
-    const tabItems = [
-        { key: 'lunch', label: '🍽️ Öğle' },
-        { key: 'dinner', label: '🌙 Akşam' }
-    ];
-
-    // Render day cell
-    const renderDayCell = (day) => {
-        const dayMenus = monthData[day.date]?.[mealKey] || [];
-        const categorySummary = getCategorySummary(dayMenus);
-        const hasMenu = dayMenus.length > 0;
 
         return (
-            <Tooltip
-                title={buildTooltipContent(dayMenus)}
-                placement="top"
-                overlayStyle={{ maxWidth: 250 }}
+            <Popover
+                content={popoverContent}
+                title={`${day.dayNumber} - ${mealType === 'lunch' ? 'Öğle' : 'Akşam'}`}
+                trigger="hover"
+                placement="right"
             >
-                <div
-                    style={{
-                        width: '100%',
-                        height: 80,
-                        padding: 4,
-                        border: day.isToday ? '2px solid #1890ff' : '1px solid #f0f0f0',
-                        borderRadius: 4,
-                        backgroundColor: !day.isCurrentMonth
-                            ? '#fafafa'
-                            : day.isToday
-                                ? '#e6f7ff'
-                                : day.isWeekend
-                                    ? '#fffbe6'
-                                    : '#fff',
-                        opacity: day.isCurrentMonth ? 1 : 0.5,
-                        cursor: hasMenu ? 'pointer' : 'default',
-                        overflow: 'hidden'
-                    }}
-                >
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: 4
-                    }}>
-                        <Text
-                            strong={day.isToday}
-                            style={{
-                                fontSize: 12,
-                                color: day.isToday ? '#1890ff' : (day.isCurrentMonth ? '#000' : '#bfbfbf')
-                            }}
-                        >
-                            {day.dayNumber}
-                        </Text>
-                        {hasMenu && (
-                            <Badge
-                                count={dayMenus.length}
-                                size="small"
-                                style={{ backgroundColor: '#52c41a' }}
-                            />
-                        )}
-                    </div>
-
-                    <div style={{ overflow: 'hidden', height: 50 }}>
-                        {!hasMenu && day.isCurrentMonth && (
-                            <Text type="secondary" style={{ fontSize: 10 }}>-</Text>
-                        )}
-                        {categorySummary.slice(0, 3).map(([category, count], idx) => (
-                            <div key={category} style={{ marginBottom: 2 }}>
-                                <Tag
-                                    color={getCategoryColor(category)}
-                                    style={{
-                                        fontSize: 9,
-                                        padding: '0 4px',
-                                        lineHeight: '16px',
-                                        marginRight: 0
-                                    }}
-                                >
-                                    {category.substring(0, 6)}{category.length > 6 ? '..' : ''} ({count})
-                                </Tag>
-                            </div>
-                        ))}
-                        {categorySummary.length > 3 && (
-                            <Text type="secondary" style={{ fontSize: 9 }}>
-                                +{categorySummary.length - 3} kategori
+                <div className="monthly-menu-content" style={{ cursor: 'pointer' }}>
+                    {categories.slice(0, 4).map(category => (
+                        <div key={category} className="monthly-category-item">
+                            <Text
+                                style={{ fontSize: 10 }}
+                                type="secondary"
+                            >
+                                {getCategoryIcon(category)}
                             </Text>
-                        )}
+                            <div style={{ fontSize: 10, marginLeft: 4 }}>
+                                {groupedMenu[category].slice(0, 2).map(item => (
+                                    <div key={item.id} style={{
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        maxWidth: 80
+                                    }}>
+                                        {item.foodName}
+                                    </div>
+                                ))}
+                                {groupedMenu[category].length > 2 && (
+                                    <Text type="secondary" style={{ fontSize: 9 }}>
+                                        +{groupedMenu[category].length - 2}
+                                    </Text>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                    {categories.length > 4 && (
+                        <Text type="secondary" style={{ fontSize: 9 }}>
+                            +{categories.length - 4} kategori
+                        </Text>
+                    )}
+                    <div style={{ marginTop: 4 }}>
+                        <Tag color="orange" style={{ fontSize: 9 }}>
+                            <FireOutlined /> {totalCalories} kcal
+                        </Tag>
                     </div>
                 </div>
-            </Tooltip>
+            </Popover>
         );
     };
+
+    // Render calendar grid
+    const renderCalendarGrid = (mealType) => {
+        const weekDays = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+
+        return (
+            <div className="monthly-calendar-grid">
+                {/* Weekday headers */}
+                <div className="monthly-weekdays">
+                    {weekDays.map(day => (
+                        <div key={day} className="monthly-weekday-header">
+                            <Text strong>{day}</Text>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Days grid */}
+                <div className="monthly-days-grid">
+                    {monthData.map((day, index) => (
+                        <div
+                            key={index}
+                            className={`monthly-day-cell ${!day.isCurrentMonth ? 'other-month' : ''} ${day.isToday ? 'today' : ''} ${day.isWeekend ? 'weekend' : ''}`}
+                        >
+                            <div className="monthly-day-header">
+                                <Badge
+                                    count={day.isToday ? 'Bugün' : 0}
+                                    style={{ fontSize: 9 }}
+                                >
+                                    <Text
+                                        strong={day.isCurrentMonth}
+                                        type={day.isCurrentMonth ? 'default' : 'secondary'}
+                                    >
+                                        {day.dayNumber}
+                                    </Text>
+                                </Badge>
+                            </div>
+                            <div className="monthly-day-content">
+                                {renderDayContent(day, mealType)}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    };
+
+    // Tab items
+    const tabItems = [
+        {
+            key: 'lunch',
+            label: '🍲 Öğle Yemeği',
+            children: renderCalendarGrid('lunch')
+        },
+        {
+            key: 'dinner',
+            label: '🍽️ Akşam Yemeği',
+            children: renderCalendarGrid('dinner')
+        }
+    ];
 
     return (
         <Modal
             title={
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <CalendarOutlined style={{ fontSize: 20, color: '#1890ff' }} />
                     <div>
-                        <CalendarOutlined style={{ marginRight: 8 }} />
-                        Aylık Menü
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                        <LeftOutlined
-                            onClick={goToPrevMonth}
-                            style={{ cursor: 'pointer', fontSize: 16 }}
-                        />
-                        <span style={{ minWidth: 150, textAlign: 'center', fontWeight: 'bold' }}>
-              {getMonthTitle()}
-            </span>
-                        <RightOutlined
-                            onClick={goToNextMonth}
-                            style={{ cursor: 'pointer', fontSize: 16 }}
-                        />
+                        <Title level={4} style={{ margin: 0 }}>Aylık Menü</Title>
+                        <Text type="secondary">
+                            {MONTH_NAMES[month]} {year}
+                        </Text>
                     </div>
                 </div>
             }
             open={visible}
             onCancel={onClose}
             footer={null}
-            width={900}
-            bodyStyle={{ padding: '12px 24px' }}
+            width={1400}
+            centered
             destroyOnClose
+            styles={{
+                body: { maxHeight: '80vh', overflowY: 'auto' }
+            }}
         >
-            <Tabs
-                activeKey={activeTab}
-                onChange={setActiveTab}
-                items={tabItems}
-                style={{ marginBottom: 8 }}
-            />
+            <Spin spinning={loading}>
+                <Tabs
+                    activeKey={activeTab}
+                    onChange={setActiveTab}
+                    items={tabItems}
+                    size="large"
+                />
+            </Spin>
 
-            {loading ? (
-                <div style={{ textAlign: 'center', padding: '60px' }}>
-                    <Spin size="large" />
-                </div>
-            ) : (
-                <div>
-                    {/* Day headers */}
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(7, 1fr)',
-                        gap: 4,
-                        marginBottom: 8
-                    }}>
-                        {DAY_NAMES.map((dayName, idx) => (
-                            <div
-                                key={dayName}
-                                style={{
-                                    textAlign: 'center',
-                                    fontWeight: 'bold',
-                                    padding: 4,
-                                    backgroundColor: idx === 5 || idx === 6 ? '#fff7e6' : '#fafafa',
-                                    borderRadius: 4
-                                }}
-                            >
-                                {dayName}
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Calendar grid */}
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(7, 1fr)',
-                        gap: 4
-                    }}>
-                        {calendarDays.map((day) => (
-                            <div key={day.date}>
-                                {renderDayCell(day)}
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Legend */}
-                    <div style={{
-                        marginTop: 16,
-                        padding: 12,
-                        background: '#fafafa',
-                        borderRadius: 8,
-                        display: 'flex',
-                        justifyContent: 'center',
-                        gap: 16,
-                        flexWrap: 'wrap'
-                    }}>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-              <span style={{
-                  display: 'inline-block',
-                  width: 12,
-                  height: 12,
-                  backgroundColor: '#e6f7ff',
-                  border: '2px solid #1890ff',
-                  marginRight: 4,
-                  verticalAlign: 'middle'
-              }}></span>
-                            Bugün
-                        </Text>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-              <span style={{
-                  display: 'inline-block',
-                  width: 12,
-                  height: 12,
-                  backgroundColor: '#fffbe6',
-                  border: '1px solid #f0f0f0',
-                  marginRight: 4,
-                  verticalAlign: 'middle'
-              }}></span>
-                            Hafta sonu
-                        </Text>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                            <Badge
-                                count={3}
-                                size="small"
-                                style={{ backgroundColor: '#52c41a', marginRight: 4 }}
-                            />
-                            Yemek sayısı
-                        </Text>
-                    </div>
-                </div>
-            )}
+            <style>{`
+                .monthly-calendar-grid {
+                    border: 1px solid #f0f0f0;
+                    border-radius: 8px;
+                    overflow: hidden;
+                }
+                
+                .monthly-weekdays {
+                    display: grid;
+                    grid-template-columns: repeat(7, 1fr);
+                    background: #fafafa;
+                    border-bottom: 1px solid #f0f0f0;
+                }
+                
+                .monthly-weekday-header {
+                    padding: 12px;
+                    text-align: center;
+                }
+                
+                .monthly-days-grid {
+                    display: grid;
+                    grid-template-columns: repeat(7, 1fr);
+                }
+                
+                .monthly-day-cell {
+                    min-height: 120px;
+                    border-right: 1px solid #f0f0f0;
+                    border-bottom: 1px solid #f0f0f0;
+                    padding: 8px;
+                    transition: all 0.2s;
+                }
+                
+                .monthly-day-cell:nth-child(7n) {
+                    border-right: none;
+                }
+                
+                .monthly-day-cell:hover {
+                    background: #f5f5f5;
+                }
+                
+                .monthly-day-cell.today {
+                    background: #e6f7ff;
+                    border: 2px solid #1890ff;
+                }
+                
+                .monthly-day-cell.other-month {
+                    background: #fafafa;
+                }
+                
+                .monthly-day-cell.weekend:not(.other-month) .monthly-day-header {
+                    color: #ff4d4f;
+                }
+                
+                .monthly-day-header {
+                    margin-bottom: 8px;
+                }
+                
+                .monthly-day-content {
+                    font-size: 11px;
+                }
+                
+                .other-month-day,
+                .no-menu-day {
+                    color: #bfbfbf;
+                    font-style: italic;
+                    text-align: center;
+                    padding: 20px 0;
+                }
+                
+                .monthly-menu-content {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                }
+                
+                .monthly-category-item {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 4px;
+                }
+            `}</style>
         </Modal>
     );
 };

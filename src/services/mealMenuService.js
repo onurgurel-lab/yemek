@@ -1,6 +1,8 @@
 /**
  * Yemek Menüsü Servis Modülü
  * CRUD işlemleri ve sorgulama fonksiyonları
+ *
+ * @module services/mealMenuService
  */
 
 import axiosInstance from '@/utils/axiosInstance';
@@ -22,9 +24,7 @@ export const getAllMenus = async () => {
  * ID'ye göre menü getirir
  */
 export const getMenuById = async (id) => {
-    const response = await axiosInstance.get(MENU.GET_BY_ID, {
-        params: { id },
-    });
+    const response = await axiosInstance.get(`${MENU.GET_BY_ID}/${id}`);
     return response.data;
 };
 
@@ -36,6 +36,14 @@ export const getMenuByDate = async (date) => {
         params: { date },
     });
     return response.data;
+};
+
+/**
+ * Bugünün menüsünü getirir
+ */
+export const getTodayMenu = async () => {
+    const today = new Date().toISOString().split('T')[0];
+    return getMenuByDate(today);
 };
 
 /**
@@ -58,9 +66,7 @@ export const updateMenuItem = async (menuData) => {
  * Menü öğesini siler
  */
 export const deleteMenuItem = async (id) => {
-    const response = await axiosInstance.delete(MENU.DELETE, {
-        params: { id },
-    });
+    const response = await axiosInstance.delete(`${MENU.DELETE}/${id}`);
     return response.data;
 };
 
@@ -70,8 +76,15 @@ export const deleteMenuItem = async (id) => {
  * Aya göre menüleri getirir
  */
 export const getMenusByMonth = async (year, month) => {
-    const response = await axiosInstance.get(MENU.GET_BY_MONTH, {
-        params: { year, month },
+    // Ayın başlangıç ve bitiş tarihlerini hesapla
+    const startDate = new Date(year, month, 1);
+    const endDate = new Date(year, month + 1, 0);
+
+    const startStr = startDate.toISOString().split('T')[0];
+    const endStr = endDate.toISOString().split('T')[0];
+
+    const response = await axiosInstance.get(MENU.GET_BY_DATE_RANGE, {
+        params: { startDate: startStr, endDate: endStr },
     });
     return response.data;
 };
@@ -87,58 +100,71 @@ export const getMenusByDateRange = async (startDate, endDate) => {
 };
 
 /**
- * Bugünün menüsünü getirir
+ * Yemek adına göre arama yapar
  */
-export const getTodayMenu = async () => {
-    const today = new Date().toISOString().split('T')[0];
-    return getMenuByDate(today);
-};
-
-// ==================== ARAMA İŞLEMLERİ ====================
-
-let searchTimeout = null;
-
-/**
- * Yemek adına göre arama yapar (debounced)
- */
-export const searchFoodByName = async (searchTerm, debounceMs = 500) => {
-    return new Promise((resolve, reject) => {
-        if (searchTimeout) {
-            clearTimeout(searchTimeout);
+export const searchFoodByName = async (searchTerm, month) => {
+    try {
+        // Eğer month parametresi varsa, o ayın menülerinde ara
+        let menus;
+        if (month) {
+            const year = new Date(month).getFullYear();
+            const monthIndex = new Date(month).getMonth();
+            menus = await getMenusByMonth(year, monthIndex);
+        } else {
+            menus = await getAllMenus();
         }
 
-        searchTimeout = setTimeout(async () => {
-            try {
-                if (!searchTerm || searchTerm.trim().length < 2) {
-                    resolve([]);
-                    return;
-                }
+        const menuData = menus?.data || menus || [];
 
-                const response = await axiosInstance.get(MENU.SEARCH, {
-                    params: { query: searchTerm.trim() },
-                });
-                resolve(response.data);
-            } catch (error) {
-                reject(error);
+        if (!Array.isArray(menuData)) return [];
+
+        // Yemek adına göre filtrele
+        const filteredMenus = menuData.filter(menu =>
+            menu.foodName?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
+        // Tarihe göre grupla
+        const groupedByDate = filteredMenus.reduce((acc, menu) => {
+            const menuDate = new Date(menu.menuDate).toISOString().split('T')[0];
+            if (!acc[menuDate]) {
+                acc[menuDate] = [];
             }
-        }, debounceMs);
-    });
+            acc[menuDate].push(menu);
+            return acc;
+        }, {});
+
+        // Sonuçları dönüştür
+        return Object.keys(groupedByDate)
+            .sort((a, b) => new Date(b) - new Date(a))
+            .map(date => ({
+                date,
+                menus: groupedByDate[date]
+            }));
+    } catch (error) {
+        console.error('Yemek araması hatası:', error);
+        return [];
+    }
 };
 
 // ==================== YARDIMCI FONKSİYONLAR ====================
 
 /**
- * Menü öğelerini kategoriye göre gruplar
+ * Menü öğelerini kategorilere göre gruplar
  */
 export const groupMenusByCategory = (menuItems) => {
     if (!Array.isArray(menuItems)) return {};
 
     const grouped = menuItems.reduce((acc, item) => {
         const category = item.category || 'Diğer';
-        if (!acc[category]) {
-            acc[category] = [];
+        const normalizedCategory = category.toLowerCase().trim();
+        const matchedCategory = CATEGORY_ORDER.find(
+            cat => cat.toLowerCase() === normalizedCategory
+        ) || 'Diğer';
+
+        if (!acc[matchedCategory]) {
+            acc[matchedCategory] = [];
         }
-        acc[category].push(item);
+        acc[matchedCategory].push(item);
         return acc;
     }, {});
 
@@ -208,77 +234,50 @@ export const importFromExcel = async (file, onProgress) => {
     formData.append('file', file);
 
     const response = await axiosInstance.post(
-        YEMEKHANE_ENDPOINTS.EXCEL.IMPORT,
+        YEMEKHANE_ENDPOINTS.EXCEL?.IMPORT || '/api/mealmenu/importfromexcel',
         formData,
         {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
             onUploadProgress: (progressEvent) => {
-                if (onProgress && progressEvent.total) {
-                    const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                    onProgress(percent);
+                if (onProgress) {
+                    const percentCompleted = Math.round(
+                        (progressEvent.loaded * 100) / progressEvent.total
+                    );
+                    onProgress(percentCompleted);
                 }
             },
         }
     );
-
     return response.data;
 };
 
-/**
- * Excel şablonunu indirir
- */
-export const downloadTemplate = async () => {
-    const response = await axiosInstance.get(YEMEKHANE_ENDPOINTS.EXCEL.TEMPLATE, {
-        responseType: 'blob',
-    });
+// ==================== DEFAULT EXPORT ====================
 
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'menu_template.xlsx');
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-};
-
-/**
- * Menüleri Excel'e aktarır
- */
-export const exportToExcel = async (startDate, endDate, filename = 'menu_export.xlsx') => {
-    const response = await axiosInstance.get(YEMEKHANE_ENDPOINTS.EXCEL.EXPORT, {
-        params: { startDate, endDate },
-        responseType: 'blob',
-    });
-
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-};
-
-export default {
+const mealMenuService = {
+    // CRUD
     getAllMenus,
     getMenuById,
     getMenuByDate,
+    getTodayMenu,
     createMenuItem,
     updateMenuItem,
     deleteMenuItem,
+
+    // Sorgulama
     getMenusByMonth,
     getMenusByDateRange,
-    getTodayMenu,
     searchFoodByName,
+
+    // Yardımcı
     groupMenusByCategory,
     groupMenusByMealTime,
     calculateTotalCalories,
     formatMenuData,
+
+    // Excel
     importFromExcel,
-    downloadTemplate,
-    exportToExcel,
 };
+
+export default mealMenuService;

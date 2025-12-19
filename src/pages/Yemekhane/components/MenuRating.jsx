@@ -1,14 +1,57 @@
+/**
+ * MenuRating.jsx - Yemek Değerlendirme Bileşeni
+ *
+ * Kullanıcıların yemeklere puan vermesi ve yorum yapmasını sağlar.
+ * Bugünün menüsü için değerlendirme yapılabilir.
+ *
+ * @module pages/Yemekhane/components/MenuRating
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { Modal, Rate, Input, Button, List, Avatar, Space, Typography, message, Spin, Empty, Popconfirm, Tag, Tooltip, Badge } from 'antd';
-import { StarOutlined, EditOutlined, DeleteOutlined, UserOutlined, CommentOutlined } from '@ant-design/icons';
+import {
+    Modal,
+    Rate,
+    Input,
+    Button,
+    List,
+    Avatar,
+    Space,
+    Typography,
+    message,
+    Spin,
+    Empty,
+    Popconfirm,
+    Tag,
+    Tooltip,
+    Badge,
+    Divider
+} from 'antd';
+import {
+    StarOutlined,
+    StarFilled,
+    EditOutlined,
+    DeleteOutlined,
+    UserOutlined,
+    CommentOutlined,
+    FireOutlined
+} from '@ant-design/icons';
 import { useAuth } from '@/hooks/useAuth';
 import { menuPointService, menuCommentService } from '@/services/evaluationService';
-import { RATING_DESCRIPTIONS } from '@/constants/mealMenuApi';
+import { RATING_DESCRIPTIONS, getCategoryColor, getCategoryIcon } from '@/constants/mealMenuApi';
 import dayjs from 'dayjs';
 
 const { TextArea } = Input;
 const { Text, Title } = Typography;
 
+/**
+ * MenuRating - Yemek Değerlendirme Modal
+ *
+ * @param {Object} props
+ * @param {Object} props.menuItem - Menü öğesi
+ * @param {boolean} props.visible - Modal görünürlüğü
+ * @param {Function} props.onClose - Modal kapatma
+ * @param {Function} props.onUpdate - Güncelleme callback
+ */
 const MenuRating = ({ menuItem, visible, onClose, onUpdate }) => {
     const { user } = useAuth();
 
@@ -24,66 +67,85 @@ const MenuRating = ({ menuItem, visible, onClose, onUpdate }) => {
     const [averageRating, setAverageRating] = useState(0);
     const [isEditing, setIsEditing] = useState(false);
 
-    // Check if today
+    // Check if menu date is today
     const isToday = useCallback(() => {
         if (!menuItem?.menuDate) return false;
         return dayjs(menuItem.menuDate).isSame(dayjs(), 'day');
     }, [menuItem]);
 
-    // Load data
+    // Load existing data
     const loadData = useCallback(async () => {
         if (!menuItem?.id) return;
 
         setLoading(true);
         try {
-            // Load all points and comments
-            const [pointsRes, commentsRes, avgRes] = await Promise.all([
-                menuPointService.getPointsByMenuId(menuItem.id),
-                menuCommentService.getCommentsByMenuId(menuItem.id),
-                menuPointService.getAverageRating(menuItem.id)
+            // Load all points and comments for this menu
+            const [pointsRes, commentsRes] = await Promise.all([
+                menuPointService.getByMenuId(menuItem.id).catch(() => ({ data: [] })),
+                menuCommentService.getByMenuId(menuItem.id).catch(() => ({ data: [] }))
             ]);
 
-            const points = pointsRes?.data || [];
-            const comments = commentsRes?.data || [];
+            const points = pointsRes?.data || pointsRes || [];
+            const comments = commentsRes?.data || commentsRes || [];
 
-            setAllPoints(points);
-            setAllComments(comments);
-            setAverageRating(avgRes?.data?.average || 0);
+            setAllPoints(Array.isArray(points) ? points : []);
+            setAllComments(Array.isArray(comments) ? comments : []);
+
+            // Calculate average rating
+            if (points.length > 0) {
+                const avg = points.reduce((sum, p) => sum + (p.point || 0), 0) / points.length;
+                setAverageRating(Math.round(avg * 10) / 10);
+            } else {
+                setAverageRating(0);
+            }
 
             // Find user's existing evaluation
-            const userPoint = points.find(p => p.uId === user?.uId);
-            const userCommentData = comments.find(c => c.uId === user?.uId);
+            if (user?.uId) {
+                const userPoint = points.find(p => p.uId === user.uId);
+                const userCommentItem = comments.find(c => c.uId === user.uId);
 
-            if (userPoint) {
-                setExistingPoint(userPoint);
-                setUserRating(userPoint.point || 0);
-            } else {
-                setExistingPoint(null);
-                setUserRating(0);
+                if (userPoint) {
+                    setExistingPoint(userPoint);
+                    setUserRating(userPoint.point || 0);
+                    setIsEditing(true);
+                } else {
+                    setExistingPoint(null);
+                    setUserRating(0);
+                    setIsEditing(false);
+                }
+
+                if (userCommentItem) {
+                    setExistingComment(userCommentItem);
+                    setUserComment(userCommentItem.comment || '');
+                } else {
+                    setExistingComment(null);
+                    setUserComment('');
+                }
             }
-
-            if (userCommentData) {
-                setExistingComment(userCommentData);
-                setUserComment(userCommentData.comment || '');
-            } else {
-                setExistingComment(null);
-                setUserComment('');
-            }
-
-            setIsEditing(false);
         } catch (error) {
-            console.error('Değerlendirme verileri yüklenirken hata:', error);
-            message.error('Değerlendirmeler yüklenemedi');
+            console.error('Değerlendirmeler yüklenirken hata:', error);
         } finally {
             setLoading(false);
         }
     }, [menuItem, user]);
 
+    // Load data when modal opens
     useEffect(() => {
-        if (visible && menuItem) {
+        if (visible && menuItem?.id) {
             loadData();
         }
     }, [visible, menuItem, loadData]);
+
+    // Reset state when modal closes
+    useEffect(() => {
+        if (!visible) {
+            setUserRating(0);
+            setUserComment('');
+            setExistingPoint(null);
+            setExistingComment(null);
+            setIsEditing(false);
+        }
+    }, [visible]);
 
     // Handle rating change
     const handleRatingChange = (value) => {
@@ -101,52 +163,70 @@ const MenuRating = ({ menuItem, visible, onClose, onUpdate }) => {
     // Submit evaluation
     const handleSubmit = async () => {
         if (!isToday()) {
-            message.warning('Sadece bugünün menüsünü değerlendirebilirsiniz');
+            message.warning('Sadece bugünün menüsünü değerlendirebilirsiniz!');
             return;
         }
 
-        if (userRating === 0) {
-            message.warning('Lütfen bir puan verin');
+        if (userRating === 0 && !userComment.trim()) {
+            message.warning('Lütfen en az bir puan verin veya yorum yazın!');
+            return;
+        }
+
+        if (!user?.uId) {
+            message.error('Kullanıcı bilgisi bulunamadı!');
             return;
         }
 
         setSubmitting(true);
         try {
-            // Handle point
-            if (existingPoint) {
-                await menuPointService.updatePoint(existingPoint.id, {
-                    point: userRating,
-                    menuId: menuItem.id
-                });
-            } else {
-                await menuPointService.addPoint({
-                    point: userRating,
-                    menuId: menuItem.id
-                });
-            }
+            const promises = [];
 
-            // Handle comment if provided
-            if (userComment.trim()) {
-                if (existingComment) {
-                    await menuCommentService.updateComment(existingComment.id, {
-                        comment: userComment.trim(),
-                        menuId: menuItem.id
-                    });
+            // Handle point
+            if (userRating > 0) {
+                const pointData = {
+                    mealMenuId: menuItem.id,
+                    userName: user.userName || user.name,
+                    point: userRating,
+                    uId: user.uId
+                };
+
+                if (existingPoint) {
+                    promises.push(menuPointService.update({
+                        id: existingPoint.id,
+                        point: userRating
+                    }));
                 } else {
-                    await menuCommentService.addComment({
-                        comment: userComment.trim(),
-                        menuId: menuItem.id
-                    });
+                    promises.push(menuPointService.add(pointData));
                 }
             }
 
-            message.success(existingPoint ? 'Değerlendirme güncellendi' : 'Değerlendirme kaydedildi');
-            setIsEditing(false);
+            // Handle comment
+            if (userComment.trim()) {
+                const commentData = {
+                    mealMenuId: menuItem.id,
+                    userName: user.userName || user.name,
+                    comment: userComment.trim(),
+                    uId: user.uId
+                };
+
+                if (existingComment) {
+                    promises.push(menuCommentService.update({
+                        id: existingComment.id,
+                        comment: userComment.trim()
+                    }));
+                } else {
+                    promises.push(menuCommentService.add(commentData));
+                }
+            }
+
+            await Promise.all(promises);
+
+            message.success(isEditing ? 'Değerlendirme güncellendi!' : 'Değerlendirme kaydedildi!');
             loadData();
             onUpdate?.();
         } catch (error) {
             console.error('Değerlendirme kaydedilirken hata:', error);
-            message.error('Değerlendirme kaydedilemedi');
+            message.error('Değerlendirme kaydedilemedi!');
         } finally {
             setSubmitting(false);
         }
@@ -155,20 +235,29 @@ const MenuRating = ({ menuItem, visible, onClose, onUpdate }) => {
     // Delete evaluation
     const handleDelete = async () => {
         if (!isToday()) {
-            message.warning('Sadece bugünün değerlendirmesini silebilirsiniz');
+            message.warning('Sadece bugünün değerlendirmesini silebilirsiniz!');
+            return;
+        }
+
+        if (!existingPoint && !existingComment) {
+            message.warning('Silinecek değerlendirme bulunamadı!');
             return;
         }
 
         setSubmitting(true);
         try {
+            const promises = [];
+
             if (existingPoint) {
-                await menuPointService.deletePoint(existingPoint.id);
+                promises.push(menuPointService.delete(existingPoint.id));
             }
             if (existingComment) {
-                await menuCommentService.deleteComment(existingComment.id);
+                promises.push(menuCommentService.delete(existingComment.id));
             }
 
-            message.success('Değerlendirme silindi');
+            await Promise.all(promises);
+
+            message.success('Değerlendirme silindi!');
             setUserRating(0);
             setUserComment('');
             setExistingPoint(null);
@@ -178,57 +267,33 @@ const MenuRating = ({ menuItem, visible, onClose, onUpdate }) => {
             onUpdate?.();
         } catch (error) {
             console.error('Değerlendirme silinirken hata:', error);
-            message.error('Değerlendirme silinemedi');
+            message.error('Değerlendirme silinemedi!');
         } finally {
             setSubmitting(false);
         }
     };
 
-    // Start editing
-    const handleStartEdit = () => {
-        if (!isToday()) {
-            message.warning('Sadece bugünün değerlendirmesini düzenleyebilirsiniz');
-            return;
-        }
-        setIsEditing(true);
+    // Render stars for display
+    const renderStars = (rating) => {
+        return (
+            <Rate
+                disabled
+                value={rating}
+                allowHalf
+                style={{ fontSize: 16 }}
+            />
+        );
     };
-
-    // Cancel editing
-    const handleCancelEdit = () => {
-        if (existingPoint) {
-            setUserRating(existingPoint.point || 0);
-        } else {
-            setUserRating(0);
-        }
-        if (existingComment) {
-            setUserComment(existingComment.comment || '');
-        } else {
-            setUserComment('');
-        }
-        setIsEditing(false);
-    };
-
-    // Get rating description
-    const getRatingDesc = (value) => {
-        return RATING_DESCRIPTIONS[value] || '';
-    };
-
-    // Format date
-    const formatDate = (dateString) => {
-        return dayjs(dateString).format('DD.MM.YYYY HH:mm');
-    };
-
-    const canEvaluate = isToday();
-    const hasExistingEvaluation = existingPoint !== null;
-    const showForm = canEvaluate && (isEditing || !hasExistingEvaluation);
 
     return (
         <Modal
             title={
                 <Space>
-                    <StarOutlined />
-                    <span>{menuItem?.foodName || 'Yemek'} - Değerlendirme</span>
-                    <Badge count={allPoints.length} style={{ backgroundColor: '#1890ff' }} />
+                    {getCategoryIcon(menuItem?.category)}
+                    <span>{menuItem?.foodName || 'Yemek Değerlendirme'}</span>
+                    <Tag color={getCategoryColor(menuItem?.category)}>
+                        {menuItem?.category || 'Diğer'}
+                    </Tag>
                 </Space>
             }
             open={visible}
@@ -237,166 +302,226 @@ const MenuRating = ({ menuItem, visible, onClose, onUpdate }) => {
             width={600}
             destroyOnClose
         >
-            {loading ? (
-                <div style={{ textAlign: 'center', padding: '40px' }}>
-                    <Spin size="large" />
+            <Spin spinning={loading}>
+                {/* Yemek Bilgisi */}
+                <div style={{ marginBottom: 24, padding: 16, background: '#fafafa', borderRadius: 8 }}>
+                    <Space direction="vertical" size={4}>
+                        <Text type="secondary">
+                            <FireOutlined /> Kalori: {menuItem?.calorie || 0} kcal
+                        </Text>
+                        <Text type="secondary">
+                            📅 Tarih: {dayjs(menuItem?.menuDate).format('DD MMMM YYYY')}
+                        </Text>
+                    </Space>
                 </div>
-            ) : (
-                <div>
-                    {/* Average Rating */}
-                    <div style={{ textAlign: 'center', marginBottom: 24, padding: 16, background: '#fafafa', borderRadius: 8 }}>
-                        <Text type="secondary">Ortalama Puan</Text>
-                        <div style={{ marginTop: 8 }}>
-                            <Rate disabled value={averageRating} allowHalf />
-                            <Text strong style={{ marginLeft: 8, fontSize: 18 }}>
-                                {averageRating.toFixed(1)} / 5
-                            </Text>
-                        </div>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                            ({allPoints.length} değerlendirme)
+
+                {/* Ortalama Puan */}
+                {allPoints.length > 0 && (
+                    <div style={{ textAlign: 'center', marginBottom: 24 }}>
+                        <Space direction="vertical" size={4}>
+                            <Text type="secondary">Ortalama Puan</Text>
+                            <Space>
+                                {renderStars(averageRating)}
+                                <Text strong style={{ fontSize: 18 }}>
+                                    {averageRating}
+                                </Text>
+                                <Text type="secondary">
+                                    ({allPoints.length} değerlendirme)
+                                </Text>
+                            </Space>
+                        </Space>
+                    </div>
+                )}
+
+                <Divider />
+
+                {/* Değerlendirme Formu */}
+                {!isToday() ? (
+                    <div style={{ textAlign: 'center', padding: 24 }}>
+                        <Text type="warning">
+                            ⚠️ Sadece bugünün menüsüne değerlendirme yapabilirsiniz!
                         </Text>
                     </div>
-
-                    {/* User's Evaluation Section */}
-                    <div style={{ marginBottom: 24 }}>
-                        <Title level={5}>
-                            <UserOutlined style={{ marginRight: 8 }} />
-                            Değerlendirmeniz
-                        </Title>
-
-                        {!canEvaluate && !hasExistingEvaluation && (
-                            <Empty
-                                description="Sadece bugünün menüsünü değerlendirebilirsiniz"
-                                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            />
-                        )}
-
-                        {hasExistingEvaluation && !isEditing && (
-                            <div style={{ padding: 16, background: '#f6ffed', borderRadius: 8, border: '1px solid #b7eb8f' }}>
-                                <Space direction="vertical" style={{ width: '100%' }}>
-                                    <div>
-                                        <Rate disabled value={userRating} />
-                                        <Text style={{ marginLeft: 8 }}>{getRatingDesc(userRating)}</Text>
-                                    </div>
-                                    {existingComment && (
-                                        <div>
-                                            <Text type="secondary">Yorumunuz:</Text>
-                                            <div style={{ marginTop: 4 }}>{existingComment.comment}</div>
-                                        </div>
-                                    )}
-                                    {canEvaluate && (
-                                        <Space style={{ marginTop: 8 }}>
-                                            <Button icon={<EditOutlined />} onClick={handleStartEdit}>
-                                                Düzenle
-                                            </Button>
-                                            <Popconfirm
-                                                title="Değerlendirmeyi sil"
-                                                description="Değerlendirmenizi silmek istediğinize emin misiniz?"
-                                                onConfirm={handleDelete}
-                                                okText="Evet"
-                                                cancelText="Hayır"
-                                            >
-                                                <Button danger icon={<DeleteOutlined />} loading={submitting}>
-                                                    Sil
-                                                </Button>
-                                            </Popconfirm>
-                                        </Space>
-                                    )}
-                                </Space>
-                            </div>
-                        )}
-
-                        {showForm && (
-                            <div style={{ padding: 16, background: '#fff7e6', borderRadius: 8, border: '1px solid #ffd591' }}>
-                                <Space direction="vertical" style={{ width: '100%' }}>
-                                    <div>
-                                        <Text>Puanınız:</Text>
-                                        <div style={{ marginTop: 8 }}>
-                                            <Rate
-                                                value={userRating}
-                                                onChange={handleRatingChange}
-                                                tooltips={Object.values(RATING_DESCRIPTIONS)}
-                                            />
-                                            {userRating > 0 && (
-                                                <Text style={{ marginLeft: 8 }}>{getRatingDesc(userRating)}</Text>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <Text>Yorumunuz (isteğe bağlı):</Text>
-                                        <TextArea
-                                            value={userComment}
-                                            onChange={handleCommentChange}
-                                            placeholder="Yemek hakkında düşüncelerinizi yazın..."
-                                            rows={3}
-                                            maxLength={500}
-                                            showCount
-                                            style={{ marginTop: 8 }}
-                                        />
-                                    </div>
-                                    <Space style={{ marginTop: 8 }}>
-                                        <Button
-                                            type="primary"
-                                            onClick={handleSubmit}
-                                            loading={submitting}
-                                            disabled={userRating === 0}
-                                        >
-                                            {hasExistingEvaluation ? 'Güncelle' : 'Kaydet'}
-                                        </Button>
-                                        {isEditing && (
-                                            <Button onClick={handleCancelEdit}>İptal</Button>
-                                        )}
-                                    </Space>
-                                </Space>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* All Comments Section */}
-                    {allComments.length > 0 && (
-                        <div>
-                            <Title level={5}>
-                                <CommentOutlined style={{ marginRight: 8 }} />
-                                Tüm Yorumlar ({allComments.length})
-                            </Title>
-                            <List
-                                itemLayout="horizontal"
-                                dataSource={allComments}
-                                style={{ maxHeight: 300, overflow: 'auto' }}
-                                renderItem={(comment) => (
-                                    <List.Item>
-                                        <List.Item.Meta
-                                            avatar={
-                                                <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#1890ff' }} />
-                                            }
-                                            title={
-                                                <Space>
-                                                    <Text strong>{comment.userName || 'Anonim'}</Text>
-                                                    {comment.uId === user?.uId && (
-                                                        <Tag color="blue" size="small">Siz</Tag>
-                                                    )}
-                                                    <Text type="secondary" style={{ fontSize: 12 }}>
-                                                        {formatDate(comment.createdAt)}
-                                                    </Text>
-                                                </Space>
-                                            }
-                                            description={comment.comment}
-                                        />
-                                    </List.Item>
+                ) : user ? (
+                    <div className="rating-form">
+                        {/* Puan Verme */}
+                        <div style={{ marginBottom: 24 }}>
+                            <Text strong>Puan Verin (1-5 yıldız):</Text>
+                            <div style={{ marginTop: 8 }}>
+                                <Rate
+                                    value={userRating}
+                                    onChange={handleRatingChange}
+                                    tooltips={Object.values(RATING_DESCRIPTIONS)}
+                                    style={{ fontSize: 32 }}
+                                />
+                                {userRating > 0 && (
+                                    <Text style={{ marginLeft: 16 }}>
+                                        {RATING_DESCRIPTIONS[userRating]}
+                                    </Text>
                                 )}
+                            </div>
+                        </div>
+
+                        {/* Yorum */}
+                        <div style={{ marginBottom: 24 }}>
+                            <Text strong>Yorumunuz:</Text>
+                            <TextArea
+                                value={userComment}
+                                onChange={handleCommentChange}
+                                placeholder="Bu yemek hakkında düşüncelerinizi paylaşın..."
+                                rows={4}
+                                maxLength={500}
+                                showCount
+                                style={{ marginTop: 8 }}
                             />
                         </div>
-                    )}
 
-                    {allComments.length === 0 && allPoints.length > 0 && (
+                        {/* Butonlar */}
+                        <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+                            <Button onClick={onClose}>
+                                İptal
+                            </Button>
+
+                            {isEditing && (existingPoint || existingComment) && (
+                                <Popconfirm
+                                    title="Değerlendirmeyi silmek istediğinizden emin misiniz?"
+                                    onConfirm={handleDelete}
+                                    okText="Evet, Sil"
+                                    cancelText="İptal"
+                                    okButtonProps={{ danger: true }}
+                                >
+                                    <Button
+                                        danger
+                                        icon={<DeleteOutlined />}
+                                        loading={submitting}
+                                    >
+                                        Sil
+                                    </Button>
+                                </Popconfirm>
+                            )}
+
+                            <Button
+                                type="primary"
+                                icon={isEditing ? <EditOutlined /> : <StarOutlined />}
+                                onClick={handleSubmit}
+                                loading={submitting}
+                                disabled={userRating === 0 && !userComment.trim()}
+                            >
+                                {isEditing ? 'Güncelle' : 'Gönder'}
+                            </Button>
+                        </Space>
+                    </div>
+                ) : (
+                    <div style={{ textAlign: 'center', padding: 24 }}>
+                        <Text type="secondary">
+                            Değerlendirme yapabilmek için giriş yapmalısınız.
+                        </Text>
+                    </div>
+                )}
+
+                <Divider />
+
+                {/* Tüm Yorumlar */}
+                <div className="all-comments">
+                    <Title level={5}>
+                        <CommentOutlined /> Yorumlar ({allComments.length})
+                    </Title>
+
+                    {allComments.length > 0 ? (
+                        <List
+                            itemLayout="horizontal"
+                            dataSource={allComments}
+                            renderItem={(comment) => (
+                                <List.Item>
+                                    <List.Item.Meta
+                                        avatar={
+                                            <Avatar icon={<UserOutlined />} />
+                                        }
+                                        title={
+                                            <Space>
+                                                <Text strong>{comment.userName}</Text>
+                                                {comment.uId === user?.uId && (
+                                                    <Tag color="blue" size="small">Siz</Tag>
+                                                )}
+                                            </Space>
+                                        }
+                                        description={comment.comment}
+                                    />
+                                </List.Item>
+                            )}
+                        />
+                    ) : (
                         <Empty
                             description="Henüz yorum yapılmamış"
                             image={Empty.PRESENTED_IMAGE_SIMPLE}
                         />
                     )}
                 </div>
-            )}
+            </Spin>
         </Modal>
+    );
+};
+
+/**
+ * MenuRatingButton - Menü listesinde gösterilen değerlendirme butonu
+ *
+ * @param {Object} props
+ * @param {Object} props.menuItem - Menü öğesi
+ * @param {boolean} props.isToday - Bugün mü
+ * @param {Function} props.onRatingClick - Tıklama callback
+ */
+export const MenuRatingButton = ({ menuItem, isToday, onRatingClick }) => {
+    const { user } = useAuth();
+    const [averageRating, setAverageRating] = useState(0);
+    const [ratingCount, setRatingCount] = useState(0);
+    const [hasUserRating, setHasUserRating] = useState(false);
+
+    useEffect(() => {
+        const loadRatingData = async () => {
+            if (!menuItem?.id) return;
+
+            try {
+                const response = await menuPointService.getByMenuId(menuItem.id);
+                const points = response?.data || response || [];
+
+                if (points.length > 0) {
+                    const avg = points.reduce((sum, p) => sum + (p.point || 0), 0) / points.length;
+                    setAverageRating(Math.round(avg * 10) / 10);
+                    setRatingCount(points.length);
+
+                    if (user?.uId) {
+                        setHasUserRating(points.some(p => p.uId === user.uId));
+                    }
+                }
+            } catch (error) {
+                // Silent fail
+            }
+        };
+
+        loadRatingData();
+    }, [menuItem, user]);
+
+    return (
+        <Space>
+            <Tooltip title={!isToday ? 'Geçmiş tarihlere değerlendirme yapılamaz' : (hasUserRating ? 'Değerlendirmeyi düzenle' : 'Değerlendir')}>
+                <Button
+                    type={hasUserRating ? 'default' : 'primary'}
+                    size="small"
+                    icon={hasUserRating ? <StarFilled /> : <StarOutlined />}
+                    onClick={onRatingClick}
+                    disabled={!isToday && !hasUserRating}
+                >
+                    {!isToday && hasUserRating ? 'Değerlendirildi' :
+                        isToday && hasUserRating ? 'Düzenle' : 'Değerlendir'}
+                </Button>
+            </Tooltip>
+
+            {ratingCount > 0 && (
+                <Badge count={averageRating} showZero style={{ backgroundColor: '#faad14' }}>
+                    <Rate disabled value={averageRating} count={1} style={{ fontSize: 16 }} />
+                </Badge>
+            )}
+        </Space>
     );
 };
 

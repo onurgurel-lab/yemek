@@ -1,8 +1,11 @@
 /**
  * Yemekhane API Sabitleri ve Yardımcı Fonksiyonlar
+ *
+ * @module constants/mealMenuApi
  */
 
-// API Endpoint Tanımları
+// ==================== API ENDPOINT TANIMLARI ====================
+
 export const API_ENDPOINTS = {
     IMPORT_EXCEL: '/api/mealmenu/importfromexcel',
     GET_MENUS: '/api/mealmenu',
@@ -23,8 +26,7 @@ export const API_ENDPOINTS = {
     }
 };
 
-// Geriye uyumluluk için eski endpoint yapısı (YEMEKHANE_ENDPOINTS)
-// Mevcut servisler bu yapıyı kullanıyor olabilir
+// Geriye uyumluluk için endpoint yapısı
 export const YEMEKHANE_ENDPOINTS = {
     // Menu İşlemleri
     MENU: {
@@ -84,19 +86,15 @@ export const YEMEKHANE_ENDPOINTS = {
         TODAY_COMMENTS: API_ENDPOINTS.REPORTS.TODAY_COMMENTS,
         COMMENTS_BY_DATE: API_ENDPOINTS.REPORTS.COMMENTS_BY_DATE,
         COMMENTS_BY_DATE_RANGE: API_ENDPOINTS.REPORTS.COMMENTS_BY_DATE_RANGE,
-        WEEKLY_SUMMARY: API_ENDPOINTS.REPORTS.GENERAL_STATS,
-        MONTHLY_SUMMARY: API_ENDPOINTS.REPORTS.GENERAL_STATS,
-        DASHBOARD: API_ENDPOINTS.REPORTS.GENERAL_STATS,
     },
     // Excel İşlemleri
     EXCEL: {
         IMPORT: API_ENDPOINTS.IMPORT_EXCEL,
-        EXPORT: API_ENDPOINTS.IMPORT_EXCEL,
-        TEMPLATE: API_ENDPOINTS.IMPORT_EXCEL,
     },
 };
 
-// Öğün Zamanları
+// ==================== ÖĞÜN ZAMANLARI ====================
+
 export const MEAL_TIMES = {
     UNKNOWN: 0,
     LUNCH: 1,
@@ -109,7 +107,8 @@ export const MEAL_TIME_LABELS = {
     [MEAL_TIMES.DINNER]: 'Akşam',
 };
 
-// Yemek Kategorileri
+// ==================== YEMEK KATEGORİLERİ ====================
+
 export const MEAL_CATEGORIES = [
     { value: 'ÇORBA', label: 'Çorba', color: '#faad14', icon: '🍲' },
     { value: 'ANA YEMEK', label: 'Ana Yemek', color: '#f5222d', icon: '🍖' },
@@ -129,7 +128,8 @@ export const CATEGORY_ORDER = [
     'Diğer',
 ];
 
-// Puan Açıklamaları
+// ==================== PUAN AÇIKLAMALARI ====================
+
 export const RATING_DESCRIPTIONS = {
     1: 'Çok Kötü',
     2: 'Kötü',
@@ -137,6 +137,8 @@ export const RATING_DESCRIPTIONS = {
     4: 'İyi',
     5: 'Çok İyi',
 };
+
+// ==================== TARİH İSİMLERİ ====================
 
 // Türkçe Ay İsimleri
 export const MONTH_NAMES = [
@@ -152,11 +154,13 @@ export const DAY_NAMES_FULL = [
     'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar',
 ];
 
-// Roller
+// ==================== ROLLER ====================
+
 export const YEMEKHANE_ROLES = {
     USER: 'User',
     ADMIN: 'Admin',
     YEMEKHANE_ADMIN: 'YemekhaneAdmin',
+    RAPOR_ADMIN: 'RaporAdmin',
 };
 
 // ==================== YARDIMCI FONKSİYONLAR ====================
@@ -165,7 +169,9 @@ export const YEMEKHANE_ROLES = {
  * Kategori rengini döndürür
  */
 export const getCategoryColor = (category) => {
-    const found = MEAL_CATEGORIES.find((c) => c.value === category);
+    const found = MEAL_CATEGORIES.find((c) =>
+        c.value.toLowerCase() === category?.toLowerCase()
+    );
     return found ? found.color : '#8c8c8c';
 };
 
@@ -173,7 +179,9 @@ export const getCategoryColor = (category) => {
  * Kategori ikonunu döndürür
  */
 export const getCategoryIcon = (category) => {
-    const found = MEAL_CATEGORIES.find((c) => c.value === category);
+    const found = MEAL_CATEGORIES.find((c) =>
+        c.value.toLowerCase() === category?.toLowerCase()
+    );
     return found ? found.icon : '🍽️';
 };
 
@@ -197,6 +205,18 @@ export const formatDate = (date) => {
 };
 
 /**
+ * Tarihi YYYY-MM-DD formatında döndürür
+ */
+export const formatDateISO = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+/**
  * Bugün mü kontrol eder
  */
 export const isToday = (date) => {
@@ -215,7 +235,7 @@ export const isToday = (date) => {
  */
 export const getDefaultMealTab = () => {
     const hour = new Date().getHours();
-    return hour < 15 ? MEAL_TIMES.LUNCH : MEAL_TIMES.DINNER;
+    return hour < 15 ? 'lunch' : 'dinner';
 };
 
 /**
@@ -312,4 +332,38 @@ export const getDayCommentByIdUrl = (id) => {
  */
 export const getDayPointByIdUrl = (id) => {
     return `${API_ENDPOINTS.DAY_POINT}/${id}`;
+};
+
+// ==================== DEFAULT EXPORT ====================
+
+export default {
+    API_ENDPOINTS,
+    YEMEKHANE_ENDPOINTS,
+    MEAL_TIMES,
+    MEAL_TIME_LABELS,
+    MEAL_CATEGORIES,
+    CATEGORY_ORDER,
+    RATING_DESCRIPTIONS,
+    MONTH_NAMES,
+    DAY_NAMES,
+    DAY_NAMES_FULL,
+    YEMEKHANE_ROLES,
+    getCategoryColor,
+    getCategoryIcon,
+    getMealTimeText,
+    formatDate,
+    formatDateISO,
+    isToday,
+    getDefaultMealTab,
+    getRatingDescription,
+    getMonthName,
+    getDayName,
+    getDayNameFull,
+    getDayNameFromDate,
+    buildApiUrl,
+    getMenuByIdUrl,
+    getCommentByIdUrl,
+    getPointByIdUrl,
+    getDayCommentByIdUrl,
+    getDayPointByIdUrl,
 };

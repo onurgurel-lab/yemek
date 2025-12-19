@@ -1,6 +1,33 @@
+/**
+ * DayEvaluationModal.jsx - Günlük Hizmet Değerlendirme Modal
+ *
+ * Kullanıcıların günün genel yemek hizmetini değerlendirmesini sağlar.
+ * Sadece bugün için değerlendirme yapılabilir.
+ *
+ * @module pages/Yemekhane/components/DayEvaluationModal
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { Modal, Rate, Input, Button, Space, Typography, message, Spin, Popconfirm, Alert } from 'antd';
-import { CalendarOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import {
+    Modal,
+    Rate,
+    Input,
+    Button,
+    Space,
+    Typography,
+    message,
+    Spin,
+    Popconfirm,
+    Alert,
+    Divider
+} from 'antd';
+import {
+    CalendarOutlined,
+    EditOutlined,
+    DeleteOutlined,
+    CheckCircleOutlined,
+    StarOutlined
+} from '@ant-design/icons';
 import { useAuth } from '@/hooks/useAuth';
 import { dayPointService, dayCommentService } from '@/services/evaluationService';
 import { RATING_DESCRIPTIONS } from '@/constants/mealMenuApi';
@@ -9,6 +36,15 @@ import dayjs from 'dayjs';
 const { TextArea } = Input;
 const { Text, Title } = Typography;
 
+/**
+ * DayEvaluationModal - Günlük Değerlendirme Modal
+ *
+ * @param {Object} props
+ * @param {boolean} props.visible - Modal görünürlüğü
+ * @param {Function} props.onClose - Modal kapatma
+ * @param {string} props.date - Değerlendirme tarihi (YYYY-MM-DD)
+ * @param {Function} props.onUpdate - Güncelleme callback
+ */
 const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
     const { user } = useAuth();
 
@@ -20,6 +56,7 @@ const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
     const [existingPoint, setExistingPoint] = useState(null);
     const [existingComment, setExistingComment] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
+    const [canEvaluate, setCanEvaluate] = useState(true);
 
     // Check if selected date is today
     const isToday = useCallback(() => {
@@ -33,6 +70,12 @@ const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
         return dayjs(date).format('DD MMMM YYYY dddd');
     }, [date]);
 
+    // Check evaluation permissions
+    const checkPermissions = useCallback(() => {
+        const today = isToday();
+        setCanEvaluate(today);
+    }, [isToday]);
+
     // Load existing evaluation
     const loadData = useCallback(async () => {
         if (!date || !user?.uId) return;
@@ -42,48 +85,63 @@ const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
             const formattedDate = dayjs(date).format('YYYY-MM-DD');
 
             // Load user's existing evaluation for this date
-            const [pointsRes, commentsRes] = await Promise.all([
-                dayPointService.getByDate(formattedDate),
-                dayCommentService.getByDate(formattedDate)
+            const [pointsRes, commentsRes] = await Promise.allSettled([
+                dayPointService.getByUser(user.uId),
+                dayCommentService.getByUser(user.uId)
             ]);
 
-            const points = pointsRes?.data || [];
-            const comments = commentsRes?.data || [];
+            // Find point for this date
+            if (pointsRes.status === 'fulfilled' && pointsRes.value) {
+                const points = pointsRes.value?.data || pointsRes.value || [];
+                const pointsArray = Array.isArray(points) ? points : [];
+                const userPoint = pointsArray.find(p => {
+                    const pointDate = dayjs(p.pointDate).format('YYYY-MM-DD');
+                    return pointDate === formattedDate;
+                });
 
-            // Find user's evaluation
-            const userPoint = points.find(p => p.uId === user.uId);
-            const userCommentData = comments.find(c => c.uId === user.uId);
-
-            if (userPoint) {
-                setExistingPoint(userPoint);
-                setUserRating(userPoint.point || 0);
-            } else {
-                setExistingPoint(null);
-                setUserRating(0);
+                if (userPoint) {
+                    setExistingPoint(userPoint);
+                    setUserRating(userPoint.point || 0);
+                    setIsEditing(true);
+                } else {
+                    setExistingPoint(null);
+                    setUserRating(0);
+                    setIsEditing(false);
+                }
             }
 
-            if (userCommentData) {
-                setExistingComment(userCommentData);
-                setUserComment(userCommentData.comment || '');
-            } else {
-                setExistingComment(null);
-                setUserComment('');
-            }
+            // Find comment for this date
+            if (commentsRes.status === 'fulfilled' && commentsRes.value) {
+                const comments = commentsRes.value?.data || commentsRes.value || [];
+                const commentsArray = Array.isArray(comments) ? comments : [];
+                const userCommentItem = commentsArray.find(c => {
+                    const commentDate = dayjs(c.commentDate).format('YYYY-MM-DD');
+                    return commentDate === formattedDate;
+                });
 
-            setIsEditing(false);
+                if (userCommentItem) {
+                    setExistingComment(userCommentItem);
+                    setUserComment(userCommentItem.comment || '');
+                    setIsEditing(true);
+                } else {
+                    setExistingComment(null);
+                    setUserComment('');
+                }
+            }
         } catch (error) {
-            console.error('Gün değerlendirmesi yüklenirken hata:', error);
-            message.error('Değerlendirme yüklenemedi');
+            console.error('Mevcut değerlendirmeler yüklenirken hata:', error);
         } finally {
             setLoading(false);
         }
     }, [date, user]);
 
+    // Load data when modal opens
     useEffect(() => {
         if (visible && date) {
+            checkPermissions();
             loadData();
         }
-    }, [visible, date, loadData]);
+    }, [visible, date, checkPermissions, loadData]);
 
     // Reset state when modal closes
     useEffect(() => {
@@ -93,6 +151,7 @@ const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
             setExistingPoint(null);
             setExistingComment(null);
             setIsEditing(false);
+            setCanEvaluate(true);
         }
     }, [visible]);
 
@@ -111,58 +170,73 @@ const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
 
     // Submit evaluation
     const handleSubmit = async () => {
-        if (!isToday()) {
-            message.warning('Sadece bugünü değerlendirebilirsiniz');
+        if (!canEvaluate) {
+            message.warning('Sadece bugünü değerlendirebilirsiniz!');
             return;
         }
 
-        if (userRating === 0) {
-            message.warning('Lütfen bir puan verin');
+        if (userRating === 0 && !userComment.trim()) {
+            message.warning('Lütfen en az bir puan verin veya yorum yazın!');
+            return;
+        }
+
+        if (!user?.uId) {
+            message.error('Kullanıcı bilgisi bulunamadı!');
             return;
         }
 
         setSubmitting(true);
         try {
             const formattedDate = dayjs(date).format('YYYY-MM-DD');
+            const promises = [];
 
             // Handle point
-            if (existingPoint) {
-                await dayPointService.updatePoint(existingPoint.id, {
-                    point: userRating,
-                    menuDate: formattedDate
-                });
-            } else {
-                await dayPointService.addPoint({
-                    point: userRating,
-                    menuDate: formattedDate
-                });
+            if (userRating > 0) {
+                if (existingPoint) {
+                    promises.push(dayPointService.update({
+                        id: existingPoint.id,
+                        point: userRating
+                    }));
+                } else {
+                    promises.push(dayPointService.add({
+                        pointDate: date,
+                        userName: user.userName || user.name,
+                        uId: user.uId,
+                        point: userRating
+                    }));
+                }
             }
 
-            // Handle comment if provided
+            // Handle comment
             if (userComment.trim()) {
                 if (existingComment) {
-                    await dayCommentService.updateComment(existingComment.id, {
-                        comment: userComment.trim(),
-                        menuDate: formattedDate
-                    });
+                    promises.push(dayCommentService.update({
+                        id: existingComment.id,
+                        comment: userComment.trim()
+                    }));
                 } else {
-                    await dayCommentService.addComment({
-                        comment: userComment.trim(),
-                        menuDate: formattedDate
-                    });
+                    promises.push(dayCommentService.add({
+                        commentDate: date,
+                        userName: user.userName || user.name,
+                        uId: user.uId,
+                        comment: userComment.trim()
+                    }));
                 }
             } else if (existingComment) {
                 // Remove comment if cleared
-                await dayCommentService.deleteComment(existingComment.id);
+                promises.push(dayCommentService.delete(existingComment.id));
             }
 
-            message.success(existingPoint ? 'Gün değerlendirmesi güncellendi' : 'Gün değerlendirmesi kaydedildi');
-            setIsEditing(false);
+            await Promise.all(promises);
+
+            message.success(isEditing ? 'Değerlendirme güncellendi!' : 'Değerlendirme kaydedildi!');
+            setIsEditing(true);
             loadData();
             onUpdate?.();
+            onClose();
         } catch (error) {
-            console.error('Gün değerlendirmesi kaydedilirken hata:', error);
-            message.error('Değerlendirme kaydedilemedi');
+            console.error('Değerlendirme kaydedilirken hata:', error);
+            message.error('Değerlendirme kaydedilemedi!');
         } finally {
             setSubmitting(false);
         }
@@ -170,21 +244,30 @@ const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
 
     // Delete evaluation
     const handleDelete = async () => {
-        if (!isToday()) {
-            message.warning('Sadece bugünün değerlendirmesini silebilirsiniz');
+        if (!canEvaluate) {
+            message.warning('Sadece bugünün değerlendirmesini silebilirsiniz!');
+            return;
+        }
+
+        if (!existingPoint && !existingComment) {
+            message.warning('Silinecek değerlendirme bulunamadı!');
             return;
         }
 
         setSubmitting(true);
         try {
+            const promises = [];
+
             if (existingPoint) {
-                await dayPointService.deletePoint(existingPoint.id);
+                promises.push(dayPointService.delete(existingPoint.id));
             }
             if (existingComment) {
-                await dayCommentService.deleteComment(existingComment.id);
+                promises.push(dayCommentService.delete(existingComment.id));
             }
 
-            message.success('Gün değerlendirmesi silindi');
+            await Promise.all(promises);
+
+            message.success('Değerlendirme silindi!');
             setUserRating(0);
             setUserComment('');
             setExistingPoint(null);
@@ -192,53 +275,21 @@ const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
             setIsEditing(false);
             loadData();
             onUpdate?.();
+            onClose();
         } catch (error) {
-            console.error('Gün değerlendirmesi silinirken hata:', error);
-            message.error('Değerlendirme silinemedi');
+            console.error('Değerlendirme silinirken hata:', error);
+            message.error('Değerlendirme silinemedi!');
         } finally {
             setSubmitting(false);
         }
     };
-
-    // Start editing
-    const handleStartEdit = () => {
-        if (!isToday()) {
-            message.warning('Sadece bugünün değerlendirmesini düzenleyebilirsiniz');
-            return;
-        }
-        setIsEditing(true);
-    };
-
-    // Cancel editing
-    const handleCancelEdit = () => {
-        if (existingPoint) {
-            setUserRating(existingPoint.point || 0);
-        } else {
-            setUserRating(0);
-        }
-        if (existingComment) {
-            setUserComment(existingComment.comment || '');
-        } else {
-            setUserComment('');
-        }
-        setIsEditing(false);
-    };
-
-    // Get rating description
-    const getRatingDesc = (value) => {
-        return RATING_DESCRIPTIONS[value] || '';
-    };
-
-    const canEvaluate = isToday();
-    const hasExistingEvaluation = existingPoint !== null;
-    const showForm = canEvaluate && (isEditing || !hasExistingEvaluation);
 
     return (
         <Modal
             title={
                 <Space>
                     <CalendarOutlined />
-                    <span>Gün Değerlendirmesi</span>
+                    <span>{isEditing ? 'Değerlendirmeyi Düzenle' : 'Günün Hizmetini Değerlendir'}</span>
                 </Space>
             }
             open={visible}
@@ -247,135 +298,127 @@ const DayEvaluationModal = ({ visible, onClose, date, onUpdate }) => {
             width={500}
             destroyOnClose
         >
-            {loading ? (
-                <div style={{ textAlign: 'center', padding: '40px' }}>
-                    <Spin size="large" />
+            <Spin spinning={loading}>
+                {/* Tarih Bilgisi */}
+                <div style={{
+                    textAlign: 'center',
+                    marginBottom: 24,
+                    padding: 16,
+                    background: '#f0f5ff',
+                    borderRadius: 8
+                }}>
+                    <Title level={4} style={{ margin: 0, color: '#1890ff' }}>
+                        {formatDisplayDate()}
+                    </Title>
+                    <Text type="secondary">
+                        {canEvaluate
+                            ? (isEditing ? 'Değerlendirmenizi güncelleyebilirsiniz' : 'Bu günün yemek hizmeti hakkında görüşlerinizi paylaşın')
+                            : 'Bu tarihi değerlendiremezsiniz'
+                        }
+                    </Text>
                 </div>
-            ) : (
-                <div>
-                    {/* Date Display */}
-                    <div style={{ textAlign: 'center', marginBottom: 24, padding: 16, background: '#f0f5ff', borderRadius: 8 }}>
-                        <Title level={4} style={{ margin: 0 }}>
-                            {formatDisplayDate()}
-                        </Title>
-                        {isToday() && (
-                            <Text type="success" style={{ marginTop: 8, display: 'block' }}>
-                                <CheckCircleOutlined /> Bugün
+
+                {/* Uyarı - Bugün Değil */}
+                {!canEvaluate && (
+                    <Alert
+                        message="Değerlendirme Yapılamaz"
+                        description="Sadece bugünün menüsünü değerlendirebilirsiniz."
+                        type="warning"
+                        showIcon
+                        style={{ marginBottom: 24 }}
+                    />
+                )}
+
+                {/* Değerlendirme Formu */}
+                {canEvaluate && user && (
+                    <>
+                        {/* Puan Verme */}
+                        <div style={{ marginBottom: 24 }}>
+                            <Text strong style={{ display: 'block', marginBottom: 12 }}>
+                                <StarOutlined /> Hizmet Puanı:
                             </Text>
-                        )}
-                    </div>
-
-                    {/* Not Today Warning */}
-                    {!canEvaluate && (
-                        <Alert
-                            message="Değerlendirme Yapılamaz"
-                            description="Sadece bugünün yemek hizmetini değerlendirebilirsiniz."
-                            type="warning"
-                            showIcon
-                            style={{ marginBottom: 24 }}
-                        />
-                    )}
-
-                    {/* Existing Evaluation Display */}
-                    {hasExistingEvaluation && !isEditing && (
-                        <div style={{ padding: 16, background: '#f6ffed', borderRadius: 8, border: '1px solid #b7eb8f', marginBottom: 24 }}>
-                            <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                                <Text type="secondary">Değerlendirmeniz</Text>
-                            </div>
                             <div style={{ textAlign: 'center' }}>
-                                <Rate disabled value={userRating} style={{ fontSize: 32 }} />
-                                <div style={{ marginTop: 8 }}>
-                                    <Text strong style={{ fontSize: 16 }}>{getRatingDesc(userRating)}</Text>
-                                </div>
-                            </div>
-                            {existingComment && (
-                                <div style={{ marginTop: 16, padding: 12, background: '#fff', borderRadius: 4 }}>
-                                    <Text type="secondary">Yorumunuz:</Text>
-                                    <div style={{ marginTop: 8 }}>{existingComment.comment}</div>
-                                </div>
-                            )}
-                            {canEvaluate && (
-                                <Space style={{ marginTop: 16, width: '100%', justifyContent: 'center' }}>
-                                    <Button icon={<EditOutlined />} onClick={handleStartEdit}>
-                                        Düzenle
-                                    </Button>
-                                    <Popconfirm
-                                        title="Değerlendirmeyi sil"
-                                        description="Gün değerlendirmenizi silmek istediğinize emin misiniz?"
-                                        onConfirm={handleDelete}
-                                        okText="Evet"
-                                        cancelText="Hayır"
-                                    >
-                                        <Button danger icon={<DeleteOutlined />} loading={submitting}>
-                                            Sil
-                                        </Button>
-                                    </Popconfirm>
-                                </Space>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Evaluation Form */}
-                    {showForm && (
-                        <div style={{ padding: 16, background: '#fff7e6', borderRadius: 8, border: '1px solid #ffd591' }}>
-                            <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                                <Text strong>Bugünkü yemek hizmetini değerlendirin</Text>
-                            </div>
-
-                            <div style={{ textAlign: 'center', marginBottom: 24 }}>
                                 <Rate
                                     value={userRating}
                                     onChange={handleRatingChange}
-                                    style={{ fontSize: 36 }}
                                     tooltips={Object.values(RATING_DESCRIPTIONS)}
+                                    style={{ fontSize: 36 }}
                                 />
                                 {userRating > 0 && (
                                     <div style={{ marginTop: 8 }}>
-                                        <Text strong style={{ fontSize: 16 }}>{getRatingDesc(userRating)}</Text>
+                                        <Text strong style={{ color: '#faad14', fontSize: 16 }}>
+                                            {RATING_DESCRIPTIONS[userRating]}
+                                        </Text>
                                     </div>
                                 )}
                             </div>
+                        </div>
 
-                            <div style={{ marginBottom: 16 }}>
-                                <Text>Yorumunuz (isteğe bağlı):</Text>
-                                <TextArea
-                                    value={userComment}
-                                    onChange={handleCommentChange}
-                                    placeholder="Bugünkü yemek hizmeti hakkında düşüncelerinizi yazın..."
-                                    rows={4}
-                                    maxLength={500}
-                                    showCount
-                                    style={{ marginTop: 8 }}
-                                />
-                            </div>
+                        <Divider />
 
-                            <Space style={{ width: '100%', justifyContent: 'center' }}>
-                                <Button
-                                    type="primary"
-                                    size="large"
-                                    onClick={handleSubmit}
-                                    loading={submitting}
-                                    disabled={userRating === 0}
+                        {/* Yorum */}
+                        <div style={{ marginBottom: 24 }}>
+                            <Text strong style={{ display: 'block', marginBottom: 12 }}>
+                                Yorumunuz:
+                            </Text>
+                            <TextArea
+                                value={userComment}
+                                onChange={handleCommentChange}
+                                placeholder="Bugünün yemek hizmeti hakkında düşüncelerinizi yazın..."
+                                rows={4}
+                                maxLength={500}
+                                showCount
+                            />
+                        </div>
+
+                        <Divider />
+
+                        {/* Butonlar */}
+                        <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+                            <Button onClick={onClose} disabled={submitting}>
+                                İptal
+                            </Button>
+
+                            {isEditing && (existingPoint || existingComment) && (
+                                <Popconfirm
+                                    title="Değerlendirmeyi silmek istediğinizden emin misiniz?"
+                                    onConfirm={handleDelete}
+                                    okText="Evet, Sil"
+                                    cancelText="İptal"
+                                    okButtonProps={{ danger: true }}
                                 >
-                                    {hasExistingEvaluation ? 'Güncelle' : 'Değerlendir'}
-                                </Button>
-                                {isEditing && (
-                                    <Button size="large" onClick={handleCancelEdit}>
-                                        İptal
+                                    <Button
+                                        danger
+                                        icon={<DeleteOutlined />}
+                                        loading={submitting}
+                                    >
+                                        Sil
                                     </Button>
-                                )}
-                            </Space>
-                        </div>
-                    )}
+                                </Popconfirm>
+                            )}
 
-                    {/* No evaluation and can't evaluate */}
-                    {!hasExistingEvaluation && !canEvaluate && (
-                        <div style={{ textAlign: 'center', padding: 24 }}>
-                            <Text type="secondary">Bu gün için değerlendirme yapılmamış</Text>
-                        </div>
-                    )}
-                </div>
-            )}
+                            <Button
+                                type="primary"
+                                icon={isEditing ? <CheckCircleOutlined /> : <StarOutlined />}
+                                onClick={handleSubmit}
+                                loading={submitting}
+                                disabled={userRating === 0 && !userComment.trim()}
+                            >
+                                {isEditing ? 'Güncelle' : 'Kaydet'}
+                            </Button>
+                        </Space>
+                    </>
+                )}
+
+                {/* Kullanıcı Giriş Yapmamış */}
+                {!user && (
+                    <div style={{ textAlign: 'center', padding: 24 }}>
+                        <Text type="secondary">
+                            Değerlendirme yapabilmek için giriş yapmalısınız.
+                        </Text>
+                    </div>
+                )}
+            </Spin>
         </Modal>
     );
 };

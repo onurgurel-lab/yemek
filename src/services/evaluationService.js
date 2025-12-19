@@ -1,6 +1,8 @@
 /**
  * Değerlendirme Servis Modülü
  * Menü ve gün puanlama/yorumlama işlemleri
+ *
+ * @module services/evaluationService
  */
 
 import axiosInstance from '@/utils/axiosInstance';
@@ -22,30 +24,24 @@ export const menuPointService = {
     /**
      * Menü ID'sine göre puanları getirir
      */
-    getByMenuId: async (menuId) => {
-        const response = await axiosInstance.get(MENU_POINT.GET_BY_MENU, {
-            params: { menuId },
-        });
+    getByMenuId: async (mealMenuId) => {
+        const response = await axiosInstance.get(`${MENU_POINT.GET_BY_MENU}/ByMealMenu/${mealMenuId}`);
         return response.data;
     },
 
     /**
      * Kullanıcının puanlarını getirir
      */
-    getByUser: async (userId) => {
-        const response = await axiosInstance.get(MENU_POINT.GET_BY_USER, {
-            params: { userId },
-        });
+    getByUser: async (uId) => {
+        const response = await axiosInstance.get(`${MENU_POINT.GET_BY_USER}/ByUser/${uId}`);
         return response.data;
     },
 
     /**
      * Menü için ortalama puanı getirir
      */
-    getAverage: async (menuId) => {
-        const response = await axiosInstance.get(MENU_POINT.GET_AVERAGE, {
-            params: { menuId },
-        });
+    getAverage: async (mealMenuId) => {
+        const response = await axiosInstance.get(`${MENU_POINT.GET_AVERAGE}/AverageRating/${mealMenuId}`);
         return response.data;
     },
 
@@ -69,9 +65,7 @@ export const menuPointService = {
      * Puanı siler
      */
     delete: async (id) => {
-        const response = await axiosInstance.delete(MENU_POINT.DELETE, {
-            params: { id },
-        });
+        const response = await axiosInstance.delete(`${MENU_POINT.DELETE}/${id}`);
         return response.data;
     },
 };
@@ -90,20 +84,16 @@ export const menuCommentService = {
     /**
      * Menü ID'sine göre yorumları getirir
      */
-    getByMenuId: async (menuId) => {
-        const response = await axiosInstance.get(MENU_COMMENT.GET_BY_MENU, {
-            params: { menuId },
-        });
+    getByMenuId: async (mealMenuId) => {
+        const response = await axiosInstance.get(`${MENU_COMMENT.GET_BY_MENU}/ByMealMenu/${mealMenuId}`);
         return response.data;
     },
 
     /**
      * Kullanıcının yorumlarını getirir
      */
-    getByUser: async (userId) => {
-        const response = await axiosInstance.get(MENU_COMMENT.GET_BY_USER, {
-            params: { userId },
-        });
+    getByUser: async (uId) => {
+        const response = await axiosInstance.get(`${MENU_COMMENT.GET_BY_USER}/ByUser/${uId}`);
         return response.data;
     },
 
@@ -127,9 +117,7 @@ export const menuCommentService = {
      * Yorumu siler
      */
     delete: async (id) => {
-        const response = await axiosInstance.delete(MENU_COMMENT.DELETE, {
-            params: { id },
-        });
+        const response = await axiosInstance.delete(`${MENU_COMMENT.DELETE}/${id}`);
         return response.data;
     },
 };
@@ -148,10 +136,8 @@ export const dayPointService = {
     /**
      * Kullanıcının gün puanlarını getirir
      */
-    getByUser: async (userId) => {
-        const response = await axiosInstance.get(DAY_POINT.GET_BY_USER, {
-            params: { userId },
-        });
+    getByUser: async (uId) => {
+        const response = await axiosInstance.get(`${DAY_POINT.GET_BY_USER}/ByUser/${uId}`);
         return response.data;
     },
 
@@ -159,9 +145,7 @@ export const dayPointService = {
      * Tarihe göre gün puanlarını getirir
      */
     getByDate: async (date) => {
-        const response = await axiosInstance.get(DAY_POINT.GET_BY_DATE, {
-            params: { date },
-        });
+        const response = await axiosInstance.get(`${DAY_POINT.GET_BY_DATE}/ByDate/${date}`);
         return response.data;
     },
 
@@ -169,7 +153,13 @@ export const dayPointService = {
      * Yeni gün puanı ekler
      */
     add: async (pointData) => {
-        const response = await axiosInstance.post(DAY_POINT.ADD, pointData);
+        const requestData = {
+            pointDate: pointData.pointDate,
+            userName: pointData.userName,
+            uId: pointData.uId,
+            point: pointData.point
+        };
+        const response = await axiosInstance.post(DAY_POINT.ADD, requestData);
         return response.data;
     },
 
@@ -177,7 +167,11 @@ export const dayPointService = {
      * Gün puanını günceller
      */
     update: async (pointData) => {
-        const response = await axiosInstance.put(DAY_POINT.UPDATE, pointData);
+        const requestData = {
+            id: pointData.id,
+            point: pointData.point
+        };
+        const response = await axiosInstance.put(DAY_POINT.UPDATE, requestData);
         return response.data;
     },
 
@@ -185,9 +179,7 @@ export const dayPointService = {
      * Gün puanını siler
      */
     delete: async (id) => {
-        const response = await axiosInstance.delete(DAY_POINT.DELETE, {
-            params: { id },
-        });
+        const response = await axiosInstance.delete(`${DAY_POINT.DELETE}/${id}`);
         return response.data;
     },
 };
@@ -206,10 +198,8 @@ export const dayCommentService = {
     /**
      * Kullanıcının gün yorumlarını getirir
      */
-    getByUser: async (userId) => {
-        const response = await axiosInstance.get(DAY_COMMENT.GET_BY_USER, {
-            params: { userId },
-        });
+    getByUser: async (uId) => {
+        const response = await axiosInstance.get(`${DAY_COMMENT.GET_BY_USER}/ByUser/${uId}`);
         return response.data;
     },
 
@@ -217,9 +207,7 @@ export const dayCommentService = {
      * Tarihe göre gün yorumlarını getirir
      */
     getByDate: async (date) => {
-        const response = await axiosInstance.get(DAY_COMMENT.GET_BY_DATE, {
-            params: { date },
-        });
+        const response = await axiosInstance.get(`${DAY_COMMENT.GET_BY_DATE}/ByDate/${date}`);
         return response.data;
     },
 
@@ -227,7 +215,13 @@ export const dayCommentService = {
      * Yeni gün yorumu ekler
      */
     add: async (commentData) => {
-        const response = await axiosInstance.post(DAY_COMMENT.ADD, commentData);
+        const requestData = {
+            commentDate: commentData.commentDate,
+            userName: commentData.userName,
+            uId: commentData.uId,
+            comment: commentData.comment
+        };
+        const response = await axiosInstance.post(DAY_COMMENT.ADD, requestData);
         return response.data;
     },
 
@@ -235,7 +229,11 @@ export const dayCommentService = {
      * Gün yorumunu günceller
      */
     update: async (commentData) => {
-        const response = await axiosInstance.put(DAY_COMMENT.UPDATE, commentData);
+        const requestData = {
+            id: commentData.id,
+            comment: commentData.comment
+        };
+        const response = await axiosInstance.put(DAY_COMMENT.UPDATE, requestData);
         return response.data;
     },
 
@@ -243,9 +241,7 @@ export const dayCommentService = {
      * Gün yorumunu siler
      */
     delete: async (id) => {
-        const response = await axiosInstance.delete(DAY_COMMENT.DELETE, {
-            params: { id },
-        });
+        const response = await axiosInstance.delete(`${DAY_COMMENT.DELETE}/${id}`);
         return response.data;
     },
 };
@@ -257,11 +253,14 @@ export const dayCommentService = {
  */
 export const getMenuEvaluations = async (menuId) => {
     const [points, comments] = await Promise.all([
-        menuPointService.getByMenuId(menuId),
-        menuCommentService.getByMenuId(menuId),
+        menuPointService.getByMenuId(menuId).catch(() => ({ data: [] })),
+        menuCommentService.getByMenuId(menuId).catch(() => ({ data: [] })),
     ]);
 
-    return { points, comments };
+    return {
+        points: points?.data || points || [],
+        comments: comments?.data || comments || []
+    };
 };
 
 /**
@@ -269,11 +268,14 @@ export const getMenuEvaluations = async (menuId) => {
  */
 export const getDayEvaluations = async (date) => {
     const [points, comments] = await Promise.all([
-        dayPointService.getByDate(date),
-        dayCommentService.getByDate(date),
+        dayPointService.getByDate(date).catch(() => ({ data: [] })),
+        dayCommentService.getByDate(date).catch(() => ({ data: [] })),
     ]);
 
-    return { points, comments };
+    return {
+        points: points?.data || points || [],
+        comments: comments?.data || comments || []
+    };
 };
 
 /**
@@ -281,12 +283,15 @@ export const getDayEvaluations = async (date) => {
  */
 export const getUserMenuEvaluation = async (menuId, userId) => {
     const [points, comments] = await Promise.all([
-        menuPointService.getByMenuId(menuId),
-        menuCommentService.getByMenuId(menuId),
+        menuPointService.getByMenuId(menuId).catch(() => ({ data: [] })),
+        menuCommentService.getByMenuId(menuId).catch(() => ({ data: [] })),
     ]);
 
-    const userPoint = points.find((p) => p.userId === userId);
-    const userComment = comments.find((c) => c.userId === userId);
+    const pointsData = points?.data || points || [];
+    const commentsData = comments?.data || comments || [];
+
+    const userPoint = pointsData.find((p) => p.uId === userId);
+    const userComment = commentsData.find((c) => c.uId === userId);
 
     return { point: userPoint, comment: userComment };
 };
@@ -296,12 +301,15 @@ export const getUserMenuEvaluation = async (menuId, userId) => {
  */
 export const getUserDayEvaluation = async (date, userId) => {
     const [points, comments] = await Promise.all([
-        dayPointService.getByDate(date),
-        dayCommentService.getByDate(date),
+        dayPointService.getByDate(date).catch(() => ({ data: [] })),
+        dayCommentService.getByDate(date).catch(() => ({ data: [] })),
     ]);
 
-    const userPoint = points.find((p) => p.userId === userId);
-    const userComment = comments.find((c) => c.userId === userId);
+    const pointsData = points?.data || points || [];
+    const commentsData = comments?.data || comments || [];
+
+    const userPoint = pointsData.find((p) => p.uId === userId);
+    const userComment = commentsData.find((c) => c.uId === userId);
 
     return { point: userPoint, comment: userComment };
 };
@@ -314,6 +322,8 @@ export const calculateAverageRating = (points) => {
     const sum = points.reduce((acc, p) => acc + (p.point || p.rating || 0), 0);
     return (sum / points.length).toFixed(1);
 };
+
+// ==================== DEFAULT EXPORT ====================
 
 export default {
     menuPointService,

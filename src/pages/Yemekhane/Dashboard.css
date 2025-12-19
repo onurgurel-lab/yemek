@@ -1,0 +1,255 @@
+/**
+ * Dashboard.css - Yemek Menüsü Dashboard Stilleri
+ */
+
+/* Container */
+.dashboard-container {
+    padding: 24px;
+    min-height: 100vh;
+    background: #f5f5f5;
+}
+
+/* Header */
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.dashboard-header h2 {
+    margin: 0;
+    color: #1890ff;
+}
+
+/* Search Section */
+.search-section {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 24px;
+}
+
+/* Search Results */
+.search-results-card {
+    margin-bottom: 24px;
+}
+
+.search-result-item {
+    padding: 12px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.search-result-item:last-child {
+    border-bottom: none;
+}
+
+.search-result-date {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.search-result-menus {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Calendar Card */
+.calendar-card {
+    background: #fff;
+    border-radius: 12px;
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.calendar-weekdays .weekday {
+    text-align: center;
+    font-weight: 600;
+    color: #8c8c8c;
+    padding: 8px 0;
+    font-size: 12px;
+}
+
+.calendar-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+
+.calendar-day {
+    width: 100%;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.calendar-day:hover:not(:disabled) {
+    background: #e6f7ff;
+}
+
+.calendar-day.other-month {
+    color: #d9d9d9;
+}
+
+.calendar-day.today {
+    border: 2px solid #1890ff;
+    font-weight: 600;
+}
+
+.calendar-day.weekend:not(.other-month) {
+    color: #ff4d4f;
+}
+
+/* Menu Card */
+.menu-card {
+    background: #fff;
+    border-radius: 12px;
+}
+
+.menu-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.date-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Menu Summary */
+.menu-summary {
+    margin-bottom: 24px;
+    padding: 16px;
+    background: #fafafa;
+    border-radius: 8px;
+}
+
+/* Menu Categories Grid */
+.menu-categories-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.menu-category-card {
+    border-radius: 8px;
+}
+
+.menu-category-card .ant-card-head {
+    background: #fafafa;
+    border-radius: 8px 8px 0 0;
+}
+
+/* Menu Items */
+.category-items {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.menu-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    background: #fafafa;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.menu-item:hover {
+    background: #f0f0f0;
+}
+
+.menu-item-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.menu-item-info .food-name {
+    font-weight: 500;
+}
+
+/* Loading Container */
+.loading-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+}
+
+/* Menu Tabs */
+.menu-tabs .ant-tabs-nav {
+    margin-bottom: 16px;
+}
+
+.menu-tabs .ant-tabs-tab {
+    padding: 12px 16px;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .menu-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .menu-categories-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 576px) {
+    .dashboard-container {
+        padding: 16px;
+    }
+
+    .calendar-day {
+        font-size: 12px;
+    }
+
+    .menu-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .menu-item-info {
+        flex-wrap: wrap;
+    }
+}
