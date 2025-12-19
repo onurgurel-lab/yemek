@@ -374,7 +374,7 @@ const MainLayout = ({ children }) => {
             </Drawer>
 
             {/* Ana İçerik */}
-            <Content>
+            <Content className="p-4 lg:p-6">
                 {children}
             </Content>
         </Layout>

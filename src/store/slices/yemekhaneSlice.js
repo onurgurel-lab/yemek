@@ -1,96 +1,128 @@
 /**
- * Yemekhane Redux Slice
- * State yönetimi ve async thunk işlemleri
+ * yemekhaneSlice.js - Yemekhane Redux Slice
  *
- * ✅ FIX: searchFood thunk düzeltildi - artık doğru servis fonksiyonunu çağırıyor
+ * Menü yönetimi için state yönetimi
+ * Eski projedeki state yapısının Redux Toolkit uyarlaması
+ *
+ * @module store/slices/yemekhaneSlice
  */
 
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import * as mealMenuService from '@/services/mealMenuService';
-import {
-    menuPointService,
-    menuCommentService,
-    dayPointService,
-    dayCommentService,
-} from '@/services/evaluationService';
-import * as reportService from '@/services/reportService';
-import * as excelService from '@/services/excelService';
-import { getDefaultMealTab } from '@/constants/mealMenuApi';
+import mealMenuService from '@/services/mealMenuService';
 
-// ==================== ASYNC THUNKS - MENÜ ====================
+// ==================== INITIAL STATE ====================
 
+const initialState = {
+    // Menü verileri
+    menuData: [],
+    todayMenu: [],
+    searchResults: [],
+
+    // Seçili değerler
+    selectedDate: null,
+    currentMonth: null,
+    activeTab: 'lunch', // 'lunch' | 'dinner'
+    searchTerm: '',
+
+    // UI state
+    showSearchResults: false,
+    showWeeklyPopup: false,
+    showMonthlyPopup: false,
+    showDayEvaluationPopup: false,
+
+    // Loading states
+    loading: false,
+    submitting: false,
+    searchLoading: false,
+
+    // Error state
+    error: null,
+};
+
+// ==================== ASYNC THUNKS ====================
+
+/**
+ * Tarihe göre menü getir
+ */
 export const fetchMenuByDate = createAsyncThunk(
     'yemekhane/fetchMenuByDate',
     async (date, { rejectWithValue }) => {
         try {
-            const data = await mealMenuService.getMenuByDate(date);
-            return { date, data };
+            const response = await mealMenuService.getMenuByDate(date);
+            return response;
         } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Menü yüklenemedi');
+            return rejectWithValue(error.message || 'Menü yüklenirken hata oluştu');
         }
     }
 );
 
+/**
+ * Bugünün menüsünü getir
+ */
 export const fetchTodayMenu = createAsyncThunk(
     'yemekhane/fetchTodayMenu',
     async (_, { rejectWithValue }) => {
         try {
-            const data = await mealMenuService.getTodayMenu();
-            return data;
+            const response = await mealMenuService.getTodayMenu();
+            return response;
         } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Bugünün menüsü yüklenemedi');
+            return rejectWithValue(error.message || 'Menü yüklenirken hata oluştu');
         }
     }
 );
 
-export const fetchMenusByMonth = createAsyncThunk(
-    'yemekhane/fetchMenusByMonth',
-    async ({ year, month }, { rejectWithValue }) => {
+/**
+ * Yemek arama
+ */
+export const searchFood = createAsyncThunk(
+    'yemekhane/searchFood',
+    async (searchTerm, { rejectWithValue }) => {
         try {
-            const data = await mealMenuService.getMenusByMonth(year, month);
-            return data;
+            const response = await mealMenuService.searchFood(searchTerm);
+            return response;
         } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Aylık menü yüklenemedi');
+            return rejectWithValue(error.message || 'Arama sırasında hata oluştu');
         }
     }
 );
 
-export const fetchMenusByDateRange = createAsyncThunk(
-    'yemekhane/fetchMenusByDateRange',
-    async ({ startDate, endDate }, { rejectWithValue }) => {
-        try {
-            const data = await mealMenuService.getMenusByDateRange(startDate, endDate);
-            return data;
-        } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Menüler yüklenemedi');
-        }
-    }
-);
-
+/**
+ * Yeni menü öğesi oluştur
+ */
 export const createMenuItem = createAsyncThunk(
     'yemekhane/createMenuItem',
     async (menuData, { rejectWithValue }) => {
         try {
-            const data = await mealMenuService.createMenuItem(menuData);
-            return data;
+            const response = await mealMenuService.createMenuItem(menuData);
+            return response;
         } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Menü eklenemedi');
+            return rejectWithValue(
+                error.response?.data?.message || error.message || 'Menü eklenirken hata oluştu'
+            );
         }
     }
 );
 
+/**
+ * Menü öğesi güncelle
+ */
 export const updateMenuItem = createAsyncThunk(
     'yemekhane/updateMenuItem',
-    async ({ id, menuData }, { rejectWithValue }) => {
+    async (menuData, { rejectWithValue }) => {
         try {
-            const data = await mealMenuService.updateMenuItem(id, menuData);
-            return data;
+            const response = await mealMenuService.updateMenuItem(menuData);
+            return response;
         } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Menü güncellenemedi');
+            return rejectWithValue(
+                error.response?.data?.message || error.message || 'Menü güncellenirken hata oluştu'
+            );
         }
     }
 );
 
+/**
+ * Menü öğesi sil
+ */
 export const deleteMenuItem = createAsyncThunk(
     'yemekhane/deleteMenuItem',
     async (id, { rejectWithValue }) => {
@@ -98,154 +130,42 @@ export const deleteMenuItem = createAsyncThunk(
             await mealMenuService.deleteMenuItem(id);
             return id;
         } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Menü silinemedi');
+            return rejectWithValue(
+                error.response?.data?.message || error.message || 'Menü silinirken hata oluştu'
+            );
         }
     }
 );
 
 /**
- * ✅ FIX: searchFood thunk - mealMenuService.searchFood çağırıyor
+ * Aylık menüleri getir
  */
-export const searchFood = createAsyncThunk(
-    'yemekhane/searchFood',
-    async (searchTerm, { rejectWithValue }) => {
+export const fetchMenusByMonth = createAsyncThunk(
+    'yemekhane/fetchMenusByMonth',
+    async ({ year, month }, { rejectWithValue }) => {
         try {
-            // ✅ searchFood fonksiyonu artık mealMenuService'de mevcut
-            const data = await mealMenuService.searchFood(searchTerm);
-            return data;
+            const response = await mealMenuService.getMenusByMonth(year, month);
+            return response;
         } catch (error) {
-            console.error('Arama hatası:', error);
-            return rejectWithValue(error.response?.data?.message || 'Arama başarısız');
+            return rejectWithValue(error.message || 'Aylık menü yüklenirken hata oluştu');
         }
     }
 );
 
-// ==================== ASYNC THUNKS - EXCEL ====================
-
-export const importFromExcel = createAsyncThunk(
-    'yemekhane/importFromExcel',
-    async (file, { rejectWithValue }) => {
+/**
+ * Tarih aralığına göre menüleri getir
+ */
+export const fetchMenusByDateRange = createAsyncThunk(
+    'yemekhane/fetchMenusByDateRange',
+    async ({ startDate, endDate }, { rejectWithValue }) => {
         try {
-            const data = await excelService.importFromExcel(file);
-            return data;
+            const response = await mealMenuService.getMenusByDateRange(startDate, endDate);
+            return response;
         } catch (error) {
-            return rejectWithValue(error.message || 'Excel içe aktarımı başarısız');
+            return rejectWithValue(error.message || 'Menüler yüklenirken hata oluştu');
         }
     }
 );
-
-// ==================== ASYNC THUNKS - PUANLAMA ====================
-
-export const addMenuPoint = createAsyncThunk(
-    'yemekhane/addMenuPoint',
-    async (pointData, { rejectWithValue }) => {
-        try {
-            const data = await menuPointService.add(pointData);
-            return data;
-        } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Puanlama eklenemedi');
-        }
-    }
-);
-
-export const updateMenuPoint = createAsyncThunk(
-    'yemekhane/updateMenuPoint',
-    async (pointData, { rejectWithValue }) => {
-        try {
-            const data = await menuPointService.update(pointData);
-            return data;
-        } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Puanlama güncellenemedi');
-        }
-    }
-);
-
-// ==================== ASYNC THUNKS - RAPORLAMA ====================
-
-export const fetchGeneralStats = createAsyncThunk(
-    'yemekhane/fetchGeneralStats',
-    async (_, { rejectWithValue }) => {
-        try {
-            const data = await reportService.getGeneralStats();
-            return data;
-        } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'İstatistikler yüklenemedi');
-        }
-    }
-);
-
-export const fetchDailyAverages = createAsyncThunk(
-    'yemekhane/fetchDailyAverages',
-    async (params, { rejectWithValue }) => {
-        try {
-            const data = await reportService.getDailyAverages(params);
-            return data;
-        } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Günlük ortalamalar yüklenemedi');
-        }
-    }
-);
-
-export const fetchMealsByRating = createAsyncThunk(
-    'yemekhane/fetchMealsByRating',
-    async (params, { rejectWithValue }) => {
-        try {
-            const data = await reportService.getMealsByRating(params);
-            return data;
-        } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Yemek puanları yüklenemedi');
-        }
-    }
-);
-
-export const fetchDashboardSummary = createAsyncThunk(
-    'yemekhane/fetchDashboardSummary',
-    async (_, { rejectWithValue }) => {
-        try {
-            const data = await reportService.getDashboardSummary();
-            return data;
-        } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Dashboard verisi yüklenemedi');
-        }
-    }
-);
-
-// ==================== INITIAL STATE ====================
-
-const initialState = {
-    // Menü verileri
-    menuData: [],
-    monthlyMenus: [],
-    selectedDate: new Date().toISOString().split('T')[0],
-    currentMonth: new Date().toISOString().slice(0, 7),
-    activeTab: getDefaultMealTab(),
-
-    // Arama
-    searchTerm: '',
-    searchResults: [],
-    showSearchResults: false,
-
-    // Modal durumları
-    showWeeklyPopup: false,
-    showMonthlyPopup: false,
-    showDayEvaluationPopup: false,
-    hasExistingEvaluation: false,
-
-    // Rapor verileri
-    generalStats: null,
-    dailyAverages: [],
-    mealsByRating: [],
-    dashboardSummary: null,
-
-    // Yükleme durumları
-    loading: false,
-    searchLoading: false,
-    submitting: false,
-
-    // Hata ve başarı mesajları
-    error: null,
-    successMessage: null,
-};
 
 // ==================== SLICE ====================
 
@@ -253,243 +173,174 @@ const yemekhaneSlice = createSlice({
     name: 'yemekhane',
     initialState,
     reducers: {
-        // Tarih işlemleri
+        // Seçili tarihi ayarla
         setSelectedDate: (state, action) => {
             state.selectedDate = action.payload;
         },
+
+        // Mevcut ayı ayarla
         setCurrentMonth: (state, action) => {
             state.currentMonth = action.payload;
         },
 
-        // Tab işlemleri
+        // Aktif tab'ı ayarla (öğle/akşam)
         setActiveTab: (state, action) => {
             state.activeTab = action.payload;
         },
 
-        // Arama işlemleri
+        // Arama terimini ayarla
         setSearchTerm: (state, action) => {
             state.searchTerm = action.payload;
         },
-        setShowSearchResults: (state, action) => {
-            state.showSearchResults = action.payload;
-        },
-        clearSearch: (state) => {
-            state.searchTerm = '';
-            state.searchResults = [];
-            state.showSearchResults = false;
-        },
+
+        // Arama sonuçlarını temizle
         clearSearchResults: (state) => {
             state.searchResults = [];
             state.showSearchResults = false;
+            state.searchTerm = '';
         },
 
-        // Modal işlemleri
-        setShowWeeklyPopup: (state, action) => {
-            state.showWeeklyPopup = action.payload;
-        },
-        setShowMonthlyPopup: (state, action) => {
-            state.showMonthlyPopup = action.payload;
-        },
-        setShowDayEvaluationPopup: (state, action) => {
-            state.showDayEvaluationPopup = action.payload;
+        // Haftalık popup toggle
+        toggleWeeklyPopup: (state, action) => {
+            state.showWeeklyPopup = action.payload ?? !state.showWeeklyPopup;
         },
 
-        // Toggle işlemleri
-        toggleWeeklyPopup: (state) => {
-            state.showWeeklyPopup = !state.showWeeklyPopup;
-        },
-        toggleMonthlyPopup: (state) => {
-            state.showMonthlyPopup = !state.showMonthlyPopup;
-        },
-        toggleDayEvaluationPopup: (state) => {
-            state.showDayEvaluationPopup = !state.showDayEvaluationPopup;
+        // Aylık popup toggle
+        toggleMonthlyPopup: (state, action) => {
+            state.showMonthlyPopup = action.payload ?? !state.showMonthlyPopup;
         },
 
-        setHasExistingEvaluation: (state, action) => {
-            state.hasExistingEvaluation = action.payload;
+        // Gün değerlendirme popup toggle
+        toggleDayEvaluationPopup: (state, action) => {
+            state.showDayEvaluationPopup = action.payload ?? !state.showDayEvaluationPopup;
         },
 
-        // Hata ve mesaj işlemleri
+        // Arama sonuçlarını göster/gizle
+        setShowSearchResults: (state, action) => {
+            state.showSearchResults = action.payload;
+        },
+
+        // Hata temizle
         clearError: (state) => {
             state.error = null;
         },
-        clearSuccessMessage: (state) => {
-            state.successMessage = null;
-        },
-        setError: (state, action) => {
-            state.error = action.payload;
-        },
 
-        // Reset
+        // State'i sıfırla
         resetState: () => initialState,
     },
     extraReducers: (builder) => {
         builder
-            // ========== Menü Fetch ==========
+            // fetchMenuByDate
             .addCase(fetchMenuByDate.pending, (state) => {
                 state.loading = true;
                 state.error = null;
             })
             .addCase(fetchMenuByDate.fulfilled, (state, action) => {
                 state.loading = false;
-                state.menuData = action.payload.data?.data || action.payload.data || [];
-                // NOT: selectedDate burada SET EDİLMEMELİ - döngüye neden olur!
+                state.menuData = action.payload;
             })
             .addCase(fetchMenuByDate.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload;
             })
 
-            // ========== Bugünün Menüsü ==========
+            // fetchTodayMenu
             .addCase(fetchTodayMenu.pending, (state) => {
                 state.loading = true;
                 state.error = null;
             })
             .addCase(fetchTodayMenu.fulfilled, (state, action) => {
                 state.loading = false;
-                state.menuData = action.payload?.data || action.payload || [];
+                state.todayMenu = action.payload;
+                state.menuData = action.payload;
             })
             .addCase(fetchTodayMenu.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload;
             })
 
-            // ========== Aylık Menü ==========
-            .addCase(fetchMenusByMonth.pending, (state) => {
-                state.loading = true;
-                state.error = null;
+            // searchFood
+            .addCase(searchFood.pending, (state) => {
+                state.searchLoading = true;
             })
-            .addCase(fetchMenusByMonth.fulfilled, (state, action) => {
-                state.loading = false;
-                state.monthlyMenus = action.payload?.data || action.payload || [];
+            .addCase(searchFood.fulfilled, (state, action) => {
+                state.searchLoading = false;
+                state.searchResults = action.payload;
+                state.showSearchResults = action.payload.length > 0;
             })
-            .addCase(fetchMenusByMonth.rejected, (state, action) => {
-                state.loading = false;
+            .addCase(searchFood.rejected, (state, action) => {
+                state.searchLoading = false;
                 state.error = action.payload;
             })
 
-            // ========== Tarih Aralığı ==========
-            .addCase(fetchMenusByDateRange.pending, (state) => {
-                state.loading = true;
-                state.error = null;
-            })
-            .addCase(fetchMenusByDateRange.fulfilled, (state, action) => {
-                state.loading = false;
-                state.monthlyMenus = action.payload?.data || action.payload || [];
-            })
-            .addCase(fetchMenusByDateRange.rejected, (state, action) => {
-                state.loading = false;
-                state.error = action.payload;
-            })
-
-            // ========== Menü CRUD ==========
+            // createMenuItem
             .addCase(createMenuItem.pending, (state) => {
                 state.submitting = true;
                 state.error = null;
             })
-            .addCase(createMenuItem.fulfilled, (state) => {
+            .addCase(createMenuItem.fulfilled, (state, action) => {
                 state.submitting = false;
-                state.successMessage = 'Menü başarıyla eklendi';
+                // Menü listesini yenilemek için ayrı bir fetch çağrısı yapılacak
             })
             .addCase(createMenuItem.rejected, (state, action) => {
                 state.submitting = false;
                 state.error = action.payload;
             })
 
+            // updateMenuItem
             .addCase(updateMenuItem.pending, (state) => {
                 state.submitting = true;
                 state.error = null;
             })
-            .addCase(updateMenuItem.fulfilled, (state) => {
+            .addCase(updateMenuItem.fulfilled, (state, action) => {
                 state.submitting = false;
-                state.successMessage = 'Menü başarıyla güncellendi';
             })
             .addCase(updateMenuItem.rejected, (state, action) => {
                 state.submitting = false;
                 state.error = action.payload;
             })
 
+            // deleteMenuItem
             .addCase(deleteMenuItem.pending, (state) => {
                 state.submitting = true;
                 state.error = null;
             })
-            .addCase(deleteMenuItem.fulfilled, (state) => {
+            .addCase(deleteMenuItem.fulfilled, (state, action) => {
                 state.submitting = false;
-                state.successMessage = 'Menü başarıyla silindi';
+                // Silinen öğeyi listeden kaldır
+                state.menuData = state.menuData.filter(
+                    (item) => item.id !== action.payload
+                );
             })
             .addCase(deleteMenuItem.rejected, (state, action) => {
                 state.submitting = false;
                 state.error = action.payload;
             })
 
-            // ========== Arama ==========
-            .addCase(searchFood.pending, (state) => {
-                state.searchLoading = true;
-                state.error = null;
-            })
-            .addCase(searchFood.fulfilled, (state, action) => {
-                state.searchLoading = false;
-                // ✅ FIX: searchFood artık doğrudan sonuç dizisi döndürüyor
-                state.searchResults = action.payload || [];
-                state.showSearchResults = (action.payload && action.payload.length > 0);
-            })
-            .addCase(searchFood.rejected, (state, action) => {
-                state.searchLoading = false;
-                state.searchResults = [];
-                state.showSearchResults = false;
-                state.error = action.payload;
-            })
-
-            // ========== Excel ==========
-            .addCase(importFromExcel.pending, (state) => {
-                state.submitting = true;
-                state.error = null;
-            })
-            .addCase(importFromExcel.fulfilled, (state) => {
-                state.submitting = false;
-                state.successMessage = 'Excel dosyası başarıyla içe aktarıldı';
-            })
-            .addCase(importFromExcel.rejected, (state, action) => {
-                state.submitting = false;
-                state.error = action.payload;
-            })
-
-            // ========== Puanlama ==========
-            .addCase(addMenuPoint.pending, (state) => {
-                state.submitting = true;
-            })
-            .addCase(addMenuPoint.fulfilled, (state) => {
-                state.submitting = false;
-                state.successMessage = 'Puanlama başarıyla eklendi';
-            })
-            .addCase(addMenuPoint.rejected, (state, action) => {
-                state.submitting = false;
-                state.error = action.payload;
-            })
-
-            // ========== Raporlama ==========
-            .addCase(fetchGeneralStats.pending, (state) => {
+            // fetchMenusByMonth
+            .addCase(fetchMenusByMonth.pending, (state) => {
                 state.loading = true;
             })
-            .addCase(fetchGeneralStats.fulfilled, (state, action) => {
+            .addCase(fetchMenusByMonth.fulfilled, (state, action) => {
                 state.loading = false;
-                state.generalStats = action.payload;
+                state.menuData = action.payload;
             })
-            .addCase(fetchGeneralStats.rejected, (state, action) => {
+            .addCase(fetchMenusByMonth.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload;
             })
 
-            .addCase(fetchDailyAverages.fulfilled, (state, action) => {
-                state.dailyAverages = action.payload || [];
+            // fetchMenusByDateRange
+            .addCase(fetchMenusByDateRange.pending, (state) => {
+                state.loading = true;
             })
-
-            .addCase(fetchMealsByRating.fulfilled, (state, action) => {
-                state.mealsByRating = action.payload || [];
+            .addCase(fetchMenusByDateRange.fulfilled, (state, action) => {
+                state.loading = false;
+                state.menuData = action.payload;
             })
-
-            .addCase(fetchDashboardSummary.fulfilled, (state, action) => {
-                state.dashboardSummary = action.payload;
+            .addCase(fetchMenusByDateRange.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.payload;
             });
     },
 });
@@ -501,26 +352,19 @@ export const {
     setCurrentMonth,
     setActiveTab,
     setSearchTerm,
-    setShowSearchResults,
-    clearSearch,
     clearSearchResults,
-    setShowWeeklyPopup,
-    setShowMonthlyPopup,
-    setShowDayEvaluationPopup,
     toggleWeeklyPopup,
     toggleMonthlyPopup,
     toggleDayEvaluationPopup,
-    setHasExistingEvaluation,
+    setShowSearchResults,
     clearError,
-    clearSuccessMessage,
-    setError,
     resetState,
 } = yemekhaneSlice.actions;
 
 // ==================== SELECTORS ====================
 
 export const selectMenuData = (state) => state.yemekhane.menuData;
-export const selectMonthlyMenus = (state) => state.yemekhane.monthlyMenus;
+export const selectTodayMenu = (state) => state.yemekhane.todayMenu;
 export const selectSelectedDate = (state) => state.yemekhane.selectedDate;
 export const selectCurrentMonth = (state) => state.yemekhane.currentMonth;
 export const selectActiveTab = (state) => state.yemekhane.activeTab;
@@ -530,15 +374,11 @@ export const selectShowSearchResults = (state) => state.yemekhane.showSearchResu
 export const selectShowWeeklyPopup = (state) => state.yemekhane.showWeeklyPopup;
 export const selectShowMonthlyPopup = (state) => state.yemekhane.showMonthlyPopup;
 export const selectShowDayEvaluationPopup = (state) => state.yemekhane.showDayEvaluationPopup;
-export const selectHasExistingEvaluation = (state) => state.yemekhane.hasExistingEvaluation;
-export const selectGeneralStats = (state) => state.yemekhane.generalStats;
-export const selectDailyAverages = (state) => state.yemekhane.dailyAverages;
-export const selectMealsByRating = (state) => state.yemekhane.mealsByRating;
-export const selectDashboardSummary = (state) => state.yemekhane.dashboardSummary;
 export const selectLoading = (state) => state.yemekhane.loading;
-export const selectSearchLoading = (state) => state.yemekhane.searchLoading;
 export const selectSubmitting = (state) => state.yemekhane.submitting;
+export const selectSearchLoading = (state) => state.yemekhane.searchLoading;
 export const selectError = (state) => state.yemekhane.error;
-export const selectSuccessMessage = (state) => state.yemekhane.successMessage;
+
+// ==================== DEFAULT EXPORT ====================
 
 export default yemekhaneSlice.reducer;

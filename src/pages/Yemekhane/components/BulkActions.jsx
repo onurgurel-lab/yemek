@@ -1,273 +1,364 @@
+/**
+ * BulkActions.jsx - Toplu İşlemler Komponenti
+ *
+ * Seçili menü öğeleri üzerinde toplu işlemler yapmayı sağlar
+ *
+ * @module pages/Yemekhane/components/BulkActions
+ */
+
 import React, { useState } from 'react';
-import { Space, Button, Dropdown, Modal, Form, Select, InputNumber, Typography, Popconfirm, Tag, message } from 'antd';
-import { DeleteOutlined, EditOutlined, DownOutlined, ExclamationCircleOutlined, CheckSquareOutlined, CloseSquareOutlined } from '@ant-design/icons';
-import { MEAL_CATEGORIES } from '@/constants/mealMenuApi';
+import {
+    Card,
+    Space,
+    Button,
+    Popconfirm,
+    Typography,
+    Tag,
+    Dropdown,
+    Modal,
+    Select,
+    DatePicker,
+    Form,
+    message,
+    Tooltip,
+} from 'antd';
+import {
+    DeleteOutlined,
+    CopyOutlined,
+    EditOutlined,
+    DownOutlined,
+    CloseOutlined,
+    SwapOutlined,
+} from '@ant-design/icons';
+import { MEAL_TIMES, MEAL_CATEGORIES } from '@/constants/mealMenuApi';
+import dayjs from 'dayjs';
+import 'dayjs/locale/tr';
+
+dayjs.locale('tr');
 
 const { Text } = Typography;
+const { Option } = Select;
 
+/**
+ * Kategori listesi
+ */
+const CATEGORIES = ['ÇORBA', 'ANA YEMEK', 'SPESYEL SALATA', 'YARDIMCI YEMEK', 'CORNER'];
+
+/**
+ * BulkActions Component
+ *
+ * @param {Object} props
+ * @param {Array} props.selectedItems - Seçili öğeler (ID listesi veya obje listesi)
+ * @param {Array} props.menuData - Tüm menü verisi (seçili öğeleri bulmak için)
+ * @param {Function} props.onDelete - Toplu silme callback'i
+ * @param {Function} props.onCopy - Toplu kopyalama callback'i
+ * @param {Function} props.onCategoryChange - Kategori değiştirme callback'i
+ * @param {Function} props.onMealTimeChange - Öğün değiştirme callback'i
+ * @param {Function} props.onClear - Seçimi temizleme callback'i
+ * @param {boolean} props.loading - Yükleme durumu
+ * @param {string} props.selectedDate - Seçili tarih
+ */
 const BulkActions = ({
-                         selectedCount = 0,
                          selectedItems = [],
-                         onBulkDelete,
-                         onBulkEdit,
-                         onSelectAll,
-                         onDeselectAll,
-                         disabled = false,
-                         totalCount = 0
+                         menuData = [],
+                         onDelete,
+                         onCopy,
+                         onCategoryChange,
+                         onMealTimeChange,
+                         onClear,
+                         loading = false,
+                         selectedDate,
                      }) => {
-    const [editModalVisible, setEditModalVisible] = useState(false);
-    const [editForm] = Form.useForm();
-    const [editLoading, setEditLoading] = useState(false);
+    const [copyModalVisible, setCopyModalVisible] = useState(false);
+    const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+    const [mealTimeModalVisible, setMealTimeModalVisible] = useState(false);
+    const [copyForm] = Form.useForm();
+    const [categoryForm] = Form.useForm();
+    const [mealTimeForm] = Form.useForm();
 
-    // Handle bulk delete
-    const handleBulkDelete = async () => {
-        if (selectedCount === 0) {
-            message.warning('Lütfen silmek için öğe seçin');
-            return;
-        }
+    /**
+     * Seçili öğe sayısı
+     */
+    const selectedCount = selectedItems.length;
 
-        try {
-            await onBulkDelete?.(selectedItems);
-        } catch (error) {
-            console.error('Toplu silme hatası:', error);
-        }
-    };
+    /**
+     * Seçili öğeler (detaylı)
+     */
+    const selectedMenuItems = menuData.filter((item) =>
+        selectedItems.includes(item.id)
+    );
 
-    // Open bulk edit modal
-    const openEditModal = () => {
-        if (selectedCount === 0) {
-            message.warning('Lütfen düzenlemek için öğe seçin');
-            return;
-        }
-        editForm.resetFields();
-        setEditModalVisible(true);
-    };
-
-    // Handle bulk edit submit
-    const handleBulkEditSubmit = async () => {
-        try {
-            const values = await editForm.validateFields();
-
-            // Filter out undefined values
-            const changes = {};
-            if (values.category !== undefined) {
-                changes.category = values.category;
-            }
-            if (values.calorie !== undefined && values.calorie !== null) {
-                changes.calorie = values.calorie;
-            }
-
-            if (Object.keys(changes).length === 0) {
-                message.warning('En az bir alan değiştirmelisiniz');
-                return;
-            }
-
-            setEditLoading(true);
-            await onBulkEdit?.(selectedItems, changes);
-            setEditModalVisible(false);
-        } catch (error) {
-            console.error('Toplu düzenleme hatası:', error);
-        } finally {
-            setEditLoading(false);
+    /**
+     * Toplu silme işlemi
+     */
+    const handleBulkDelete = () => {
+        if (onDelete) {
+            onDelete(selectedItems);
         }
     };
 
-    // Cancel edit modal
-    const handleCancelEdit = () => {
-        editForm.resetFields();
-        setEditModalVisible(false);
+    /**
+     * Toplu kopyalama modalını aç
+     */
+    const handleOpenCopyModal = () => {
+        copyForm.resetFields();
+        copyForm.setFieldsValue({
+            targetDate: dayjs(selectedDate).add(1, 'day'),
+            targetMealTime: null, // Mevcut öğünleri koru
+        });
+        setCopyModalVisible(true);
     };
 
-    // More actions dropdown items
-    const moreActionsItems = [
-        {
-            key: 'selectAll',
-            label: 'Tümünü Seç',
-            icon: <CheckSquareOutlined />,
-            onClick: onSelectAll
-        },
-        {
-            key: 'deselectAll',
-            label: 'Seçimi Kaldır',
-            icon: <CloseSquareOutlined />,
-            onClick: onDeselectAll
+    /**
+     * Toplu kopyalama işlemi
+     */
+    const handleBulkCopy = async (values) => {
+        if (onCopy) {
+            await onCopy(selectedItems, {
+                targetDate: values.targetDate.format('YYYY-MM-DD'),
+                targetMealTime: values.targetMealTime,
+            });
         }
-    ];
+        setCopyModalVisible(false);
+    };
 
-    // If no items selected, show minimal UI
+    /**
+     * Kategori değiştirme işlemi
+     */
+    const handleCategoryChange = async (values) => {
+        if (onCategoryChange) {
+            await onCategoryChange(selectedItems, values.category);
+        }
+        setCategoryModalVisible(false);
+    };
+
+    /**
+     * Öğün değiştirme işlemi
+     */
+    const handleMealTimeChange = async (values) => {
+        if (onMealTimeChange) {
+            await onMealTimeChange(selectedItems, values.mealTime);
+        }
+        setMealTimeModalVisible(false);
+    };
+
+    /**
+     * Dropdown menü öğeleri
+     */
+    const moreActionsMenu = {
+        items: [
+            {
+                key: 'copy',
+                icon: <CopyOutlined />,
+                label: 'Başka Tarihe Kopyala',
+                onClick: handleOpenCopyModal,
+            },
+            {
+                key: 'category',
+                icon: <EditOutlined />,
+                label: 'Kategori Değiştir',
+                onClick: () => setCategoryModalVisible(true),
+                disabled: !onCategoryChange,
+            },
+            {
+                key: 'mealtime',
+                icon: <SwapOutlined />,
+                label: 'Öğün Değiştir',
+                onClick: () => setMealTimeModalVisible(true),
+                disabled: !onMealTimeChange,
+            },
+        ],
+    };
+
+    // Seçim yoksa gösterme
     if (selectedCount === 0) {
-        return (
-            <div style={{
-                padding: '8px 16px',
-                background: '#fafafa',
-                borderRadius: 8,
-                marginBottom: 16,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-            }}>
-                <Text type="secondary">
-                    Toplu işlem için öğe seçin
-                </Text>
-                {totalCount > 0 && (
-                    <Button
-                        size="small"
-                        icon={<CheckSquareOutlined />}
-                        onClick={onSelectAll}
-                    >
-                        Tümünü Seç ({totalCount})
-                    </Button>
-                )}
-            </div>
-        );
+        return null;
     }
 
     return (
         <>
-            <div style={{
-                padding: '12px 16px',
-                background: '#e6f7ff',
-                borderRadius: 8,
-                marginBottom: 16,
-                border: '1px solid #91d5ff',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: 8
-            }}>
-                <Space>
-                    <Tag color="blue" style={{ margin: 0, padding: '4px 12px', fontSize: 14 }}>
+            <Card size="small" style={{ marginBottom: 16 }}>
+                <Space wrap align="center">
+                    {/* Seçim Bilgisi */}
+                    <Tag color="blue">
                         {selectedCount} öğe seçildi
                     </Tag>
-                </Space>
 
-                <Space wrap>
-                    <Button
-                        icon={<EditOutlined />}
-                        onClick={openEditModal}
-                        disabled={disabled}
-                    >
-                        Toplu Düzenle
-                    </Button>
-
+                    {/* Toplu Sil */}
                     <Popconfirm
-                        title="Toplu Silme"
-                        description={`${selectedCount} öğeyi silmek istediğinize emin misiniz?`}
+                        title={`${selectedCount} öğeyi silmek istediğinizden emin misiniz?`}
+                        description="Bu işlem geri alınamaz."
                         onConfirm={handleBulkDelete}
                         okText="Evet, Sil"
                         cancelText="İptal"
                         okButtonProps={{ danger: true }}
-                        icon={<ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />}
                     >
                         <Button
                             danger
                             icon={<DeleteOutlined />}
-                            disabled={disabled}
+                            loading={loading}
+                            size="small"
                         >
-                            Toplu Sil
+                            Seçilenleri Sil
                         </Button>
                     </Popconfirm>
 
-                    <Dropdown
-                        menu={{ items: moreActionsItems }}
-                        trigger={['click']}
-                    >
-                        <Button>
-                            Diğer <DownOutlined />
-                        </Button>
-                    </Dropdown>
-                </Space>
-            </div>
+                    {/* Kopyala */}
+                    {onCopy && (
+                        <Tooltip title="Seçili öğeleri başka tarihe kopyala">
+                            <Button
+                                icon={<CopyOutlined />}
+                                onClick={handleOpenCopyModal}
+                                loading={loading}
+                                size="small"
+                            >
+                                Kopyala
+                            </Button>
+                        </Tooltip>
+                    )}
 
-            {/* Bulk Edit Modal */}
-            <Modal
-                title={
-                    <Space>
-                        <EditOutlined />
-                        <span>Toplu Düzenleme</span>
-                        <Tag color="blue">{selectedCount} öğe</Tag>
-                    </Space>
-                }
-                open={editModalVisible}
-                onCancel={handleCancelEdit}
-                footer={[
-                    <Button key="cancel" onClick={handleCancelEdit}>
-                        İptal
-                    </Button>,
+                    {/* Diğer İşlemler */}
+                    {(onCategoryChange || onMealTimeChange) && (
+                        <Dropdown menu={moreActionsMenu}>
+                            <Button size="small">
+                                Diğer İşlemler <DownOutlined />
+                            </Button>
+                        </Dropdown>
+                    )}
+
+                    {/* Seçimi Temizle */}
                     <Button
-                        key="submit"
-                        type="primary"
-                        onClick={handleBulkEditSubmit}
-                        loading={editLoading}
+                        icon={<CloseOutlined />}
+                        onClick={onClear}
+                        size="small"
+                        type="text"
                     >
-                        Uygula
+                        Seçimi Temizle
                     </Button>
-                ]}
-                destroyOnClose
+                </Space>
+            </Card>
+
+            {/* Kopyalama Modal */}
+            <Modal
+                title="Seçili Öğeleri Kopyala"
+                open={copyModalVisible}
+                onCancel={() => setCopyModalVisible(false)}
+                footer={null}
+                width={400}
             >
                 <Form
-                    form={editForm}
+                    form={copyForm}
                     layout="vertical"
+                    onFinish={handleBulkCopy}
                 >
-                    <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-                        Değiştirmek istediğiniz alanları doldurun. Boş bırakılan alanlar değiştirilmeyecektir.
-                    </Text>
+                    <Form.Item
+                        name="targetDate"
+                        label="Hedef Tarih"
+                        rules={[{ required: true, message: 'Tarih seçin' }]}
+                    >
+                        <DatePicker
+                            style={{ width: '100%' }}
+                            format="DD MMMM YYYY"
+                            disabledDate={(current) =>
+                                current && current < dayjs().startOf('day')
+                            }
+                        />
+                    </Form.Item>
 
+                    <Form.Item
+                        name="targetMealTime"
+                        label="Hedef Öğün (Opsiyonel)"
+                        tooltip="Boş bırakırsanız mevcut öğünler korunur"
+                    >
+                        <Select allowClear placeholder="Mevcut öğünleri koru">
+                            <Option value={MEAL_TIMES.LUNCH}>🌞 Öğle Yemeği</Option>
+                            <Option value={MEAL_TIMES.DINNER}>🌙 Akşam Yemeği</Option>
+                        </Select>
+                    </Form.Item>
+
+                    <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+                        <Button onClick={() => setCopyModalVisible(false)}>İptal</Button>
+                        <Button type="primary" htmlType="submit" loading={loading}>
+                            Kopyala
+                        </Button>
+                    </Space>
+                </Form>
+            </Modal>
+
+            {/* Kategori Değiştirme Modal */}
+            <Modal
+                title="Kategori Değiştir"
+                open={categoryModalVisible}
+                onCancel={() => setCategoryModalVisible(false)}
+                footer={null}
+                width={400}
+            >
+                <Form
+                    form={categoryForm}
+                    layout="vertical"
+                    onFinish={handleCategoryChange}
+                >
                     <Form.Item
                         name="category"
-                        label="Kategori"
+                        label="Yeni Kategori"
+                        rules={[{ required: true, message: 'Kategori seçin' }]}
                     >
-                        <Select
-                            allowClear
-                            placeholder="Kategori seçin (değiştirmek için)"
-                            options={MEAL_CATEGORIES.map(cat => ({
-                                value: cat.label,
-                                label: (
-                                    <Space>
-                                        <span>{cat.icon}</span>
-                                        <span>{cat.label}</span>
-                                    </Space>
-                                )
-                            }))}
-                        />
+                        <Select placeholder="Kategori seçin">
+                            {CATEGORIES.map((cat) => (
+                                <Option key={cat} value={cat}>
+                                    {cat}
+                                </Option>
+                            ))}
+                        </Select>
                     </Form.Item>
 
+                    <Text type="secondary">
+                        {selectedCount} öğenin kategorisi değiştirilecek.
+                    </Text>
+
+                    <Space style={{ width: '100%', justifyContent: 'flex-end', marginTop: 16 }}>
+                        <Button onClick={() => setCategoryModalVisible(false)}>İptal</Button>
+                        <Button type="primary" htmlType="submit" loading={loading}>
+                            Değiştir
+                        </Button>
+                    </Space>
+                </Form>
+            </Modal>
+
+            {/* Öğün Değiştirme Modal */}
+            <Modal
+                title="Öğün Değiştir"
+                open={mealTimeModalVisible}
+                onCancel={() => setMealTimeModalVisible(false)}
+                footer={null}
+                width={400}
+            >
+                <Form
+                    form={mealTimeForm}
+                    layout="vertical"
+                    onFinish={handleMealTimeChange}
+                >
                     <Form.Item
-                        name="calorie"
-                        label="Kalori (kcal)"
+                        name="mealTime"
+                        label="Yeni Öğün"
+                        rules={[{ required: true, message: 'Öğün seçin' }]}
                     >
-                        <InputNumber
-                            min={0}
-                            max={5000}
-                            placeholder="Kalori değeri girin (değiştirmek için)"
-                            style={{ width: '100%' }}
-                        />
+                        <Select placeholder="Öğün seçin">
+                            <Option value={MEAL_TIMES.LUNCH}>🌞 Öğle Yemeği</Option>
+                            <Option value={MEAL_TIMES.DINNER}>🌙 Akşam Yemeği</Option>
+                        </Select>
                     </Form.Item>
 
-                    {/* Preview of selected items */}
-                    <div style={{
-                        marginTop: 16,
-                        padding: 12,
-                        background: '#fafafa',
-                        borderRadius: 8,
-                        maxHeight: 150,
-                        overflow: 'auto'
-                    }}>
-                        <Text type="secondary" style={{ marginBottom: 8, display: 'block' }}>
-                            Seçili Öğeler:
-                        </Text>
-                        {selectedItems.slice(0, 5).map((item, idx) => (
-                            <div key={item.id || idx} style={{ marginBottom: 4 }}>
-                                <Tag>{item.foodName}</Tag>
-                            </div>
-                        ))}
-                        {selectedItems.length > 5 && (
-                            <Text type="secondary">
-                                +{selectedItems.length - 5} öğe daha...
-                            </Text>
-                        )}
-                    </div>
+                    <Text type="secondary">
+                        {selectedCount} öğenin öğünü değiştirilecek.
+                    </Text>
+
+                    <Space style={{ width: '100%', justifyContent: 'flex-end', marginTop: 16 }}>
+                        <Button onClick={() => setMealTimeModalVisible(false)}>İptal</Button>
+                        <Button type="primary" htmlType="submit" loading={loading}>
+                            Değiştir
+                        </Button>
+                    </Space>
                 </Form>
             </Modal>
         </>
