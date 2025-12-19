@@ -6,12 +6,13 @@
  *
  * Güncelleme: Yemekhane dropdown kaldırıldı, menüler doğrudan header'da listeleniyor
  * Menü Görüntüle kaldırıldı (Dashboard'da gösteriliyor)
+ * Rol etiketleri kaldırıldı (temiz görünüm)
  *
  * @module layouts/MainLayout
  */
 
 import { useState } from 'react';
-import { Layout, Menu, Button, Dropdown, Avatar, Drawer, Tag } from 'antd';
+import { Layout, Menu, Button, Dropdown, Avatar, Drawer } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
@@ -22,7 +23,6 @@ import {
     GlobalOutlined,
     DashboardOutlined,
     UploadOutlined,
-    SettingOutlined,
     BarChartOutlined,
     EditOutlined,
 } from '@ant-design/icons';
@@ -46,7 +46,7 @@ const MainLayout = ({ children }) => {
     const { user, logout } = useAuth();
 
     // Rol kontrolü için hook
-    const { canManageMenu, isAdmin, isYemekhaneAdmin, roles } = useUserRoles();
+    const { canManageMenu } = useUserRoles();
 
     /**
      * menuItems - Ana navigasyon menü öğeleri
@@ -63,26 +63,12 @@ const MainLayout = ({ children }) => {
                 setMobileMenuVisible(false);
             },
         },
-        // Menü Yönetimi - sadece Admin/RaporAdmin (dropdown değil, doğrudan header'da)
+        // Menü Yönetimi - sadece Admin/RaporAdmin
         ...(canManageMenu ? [
             {
                 key: ROUTES.YEMEKHANE_MANAGEMENT || '/yemekhane/yonetim',
                 icon: <EditOutlined />,
-                label: (
-                    <span>
-                        Menü Yönetimi
-                        {isAdmin && (
-                            <Tag color="red" style={{ marginLeft: 8, fontSize: '10px' }}>
-                                Admin
-                            </Tag>
-                        )}
-                        {isYemekhaneAdmin && !isAdmin && (
-                            <Tag color="orange" style={{ marginLeft: 8, fontSize: '10px' }}>
-                                Rapor
-                            </Tag>
-                        )}
-                    </span>
-                ),
+                label: 'Menü Yönetimi',
                 onClick: () => {
                     navigate(ROUTES.YEMEKHANE_MANAGEMENT || '/yemekhane/yonetim');
                     setMobileMenuVisible(false);
@@ -128,37 +114,9 @@ const MainLayout = ({ children }) => {
     ];
 
     /**
-     * Kullanıcı menüsü (profil dropdown)
+     * Kullanıcı menüsü (profil dropdown) - Sadeleştirildi
      */
     const userMenuItems = [
-        // Rol bilgisi göster
-        {
-            key: 'roles-info',
-            type: 'group',
-            label: (
-                <div style={{ padding: '4px 0' }}>
-                    <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>
-                        Roller:
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                        {roles.length > 0 ? (
-                            roles.map((role) => (
-                                <Tag
-                                    key={role}
-                                    color={role === 'Admin' ? 'red' : role === 'RaporAdmin' ? 'orange' : 'blue'}
-                                    style={{ fontSize: '10px' }}
-                                >
-                                    {role}
-                                </Tag>
-                            ))
-                        ) : (
-                            <Tag color="default" style={{ fontSize: '10px' }}>Rol yok</Tag>
-                        )}
-                    </div>
-                </div>
-            ),
-        },
-        { type: 'divider' },
         {
             key: 'logout',
             icon: <LogoutOutlined />,
@@ -266,9 +224,6 @@ const MainLayout = ({ children }) => {
                                 <div className="text-white text-sm font-medium">
                                     {user?.fullName || user?.username}
                                 </div>
-                                <div className="text-gray-400 text-xs">
-                                    {canManageMenu ? (isAdmin ? 'Admin' : 'RaporAdmin') : 'Kullanıcı'}
-                                </div>
                             </div>
                         </div>
                     </Dropdown>
@@ -318,25 +273,6 @@ const MainLayout = ({ children }) => {
                                 {user?.fullName || user?.username}
                             </div>
                             <div className="text-xs text-gray-500">{user?.email}</div>
-                        </div>
-                    </div>
-
-                    {/* Roller */}
-                    <div className="mb-4">
-                        <div className="text-xs text-gray-500 mb-2">Roller:</div>
-                        <div className="flex flex-wrap gap-1">
-                            {roles.length > 0 ? (
-                                roles.map((role) => (
-                                    <Tag
-                                        key={role}
-                                        color={role === 'Admin' ? 'red' : role === 'RaporAdmin' ? 'orange' : 'blue'}
-                                    >
-                                        {role}
-                                    </Tag>
-                                ))
-                            ) : (
-                                <Tag color="default">Rol yok</Tag>
-                            )}
                         </div>
                     </div>
 
