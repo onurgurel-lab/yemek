@@ -8,6 +8,8 @@
 
 export const API_ENDPOINTS = {
     IMPORT_EXCEL: '/api/mealmenu/importfromexcel',
+    EXPORT_EXCEL: '/api/mealmenu/exporttoexcel',
+    EXPORT_TEMPLATE: '/api/mealmenu/exporttemplate',
     GET_MENUS: '/api/mealmenu',
     GET_MENU_BY_ID: '/api/mealmenu',
     MENU_COMMENT: '/api/menucomment',
@@ -87,9 +89,11 @@ export const YEMEKHANE_ENDPOINTS = {
         COMMENTS_BY_DATE: API_ENDPOINTS.REPORTS.COMMENTS_BY_DATE,
         COMMENTS_BY_DATE_RANGE: API_ENDPOINTS.REPORTS.COMMENTS_BY_DATE_RANGE,
     },
-    // Excel İşlemleri
+    // Excel İşlemleri (GÜNCELLENDİ - EXPORT ve TEMPLATE eklendi)
     EXCEL: {
         IMPORT: API_ENDPOINTS.IMPORT_EXCEL,
+        EXPORT: API_ENDPOINTS.EXPORT_EXCEL,
+        TEMPLATE: API_ENDPOINTS.EXPORT_TEMPLATE,
     },
 };
 
