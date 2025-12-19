@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Card, Tabs, Input, Row, Col, Badge, Tag, Empty, Spin, Button, Typography, Space, Tooltip, Statistic, Rate } from 'antd';
-import { SearchOutlined, CalendarOutlined, FireOutlined, LeftOutlined, RightOutlined, StarOutlined, StarFilled } from '@ant-design/icons';
+import { Card, Tabs, Input, Row, Col, Badge, Tag, Empty, Spin, Button, Typography, Space, Tooltip, Statistic } from 'antd';
+import { SearchOutlined, CalendarOutlined, FireOutlined, LeftOutlined, RightOutlined, StarOutlined } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
-import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
 import {
     fetchMenuByDate,
@@ -55,15 +54,8 @@ const { Search } = Input;
 
 /**
  * Dashboard - Yemek Menüsü Entegre Dashboard
- *
- * Sol tarafta takvim, sağ tarafta günlük menü görünümü.
- * Öğle ve akşam yemeği tabları, arama, değerlendirme özellikleri içerir.
- * Her yemek yanında ortalama puan ve değerlendirme butonu gösterilir.
- *
- * @returns {JSX.Element} Dashboard
  */
 const Dashboard = () => {
-    const { t } = useTranslation();
     const dispatch = useDispatch();
     const { user } = useAuth();
 
@@ -85,22 +77,19 @@ const Dashboard = () => {
     const [selectedMenuItem, setSelectedMenuItem] = useState(null);
     const [showRatingModal, setShowRatingModal] = useState(false);
     const [hasExistingEvaluation, setHasExistingEvaluation] = useState(false);
-
-    // ✅ Yemek puanları için state
-    const [menuRatings, setMenuRatings] = useState({}); // { menuId: { average, count, userRating } }
+    const [menuRatings, setMenuRatings] = useState({});
     const [ratingsLoading, setRatingsLoading] = useState(false);
 
-    // Refs for preventing infinite loops
+    // Refs
     const isInitializedRef = useRef(false);
     const previousDateRef = useRef(null);
 
-    // ✅ FIX: userId'yi doğru şekilde al (id veya uId)
+    // User info
     const userId = user?.id || user?.uId;
     const userName = user?.userName || user?.fullName || user?.name || 'Kullanıcı';
 
     /**
      * Tüm menü itemları için puan bilgilerini yükle
-     * Eski koddaki loadExistingData mantığı
      */
     const loadMenuRatings = useCallback(async (menuItems) => {
         if (!menuItems || menuItems.length === 0) return;
@@ -109,7 +98,6 @@ const Dashboard = () => {
         try {
             const ratings = {};
 
-            // Kullanıcının tüm puanlarını bir kerede çek
             let userPoints = [];
             if (userId) {
                 try {
@@ -121,22 +109,18 @@ const Dashboard = () => {
                 }
             }
 
-            // Her menü item için puan bilgilerini çek
             for (const item of menuItems) {
                 try {
-                    // Menüye ait tüm puanları çek
                     const pointsResponse = await menuPointService.getByMenuId(item.id);
                     const points = pointsResponse?.data || pointsResponse || [];
                     const pointsArray = Array.isArray(points) ? points : [];
 
-                    // Ortalama hesapla
                     let average = 0;
                     if (pointsArray.length > 0) {
                         const sum = pointsArray.reduce((acc, p) => acc + (p.point || 0), 0);
                         average = Math.round((sum / pointsArray.length) * 10) / 10;
                     }
 
-                    // Kullanıcının bu yemeğe verdiği puanı bul
                     const userRating = userPoints.find(p => p.mealMenuId === item.id);
 
                     ratings[item.id] = {
@@ -154,13 +138,13 @@ const Dashboard = () => {
 
             setMenuRatings(ratings);
         } catch (error) {
-            console.error('Puan bilgileri yüklenirken hata:', error);
+            console.error('Puanlar yüklenirken hata:', error);
         } finally {
             setRatingsLoading(false);
         }
     }, [userId]);
 
-    // Check if user has existing evaluation for a specific date
+    // Check existing day evaluation
     const checkExistingEvaluation = useCallback(async (dateToCheck) => {
         if (!userId || !dateToCheck) {
             setHasExistingEvaluation(false);
@@ -185,7 +169,7 @@ const Dashboard = () => {
         }
     }, [userId]);
 
-    // Initialize on mount - runs only once
+    // Initialize
     useEffect(() => {
         if (isInitializedRef.current) return;
         isInitializedRef.current = true;
@@ -193,23 +177,16 @@ const Dashboard = () => {
         const today = dayjs().format('YYYY-MM-DD');
         const month = dayjs().format('YYYY-MM');
 
-        // Set initial state
         dispatch(setSelectedDate(today));
         dispatch(setCurrentMonth(month));
         dispatch(setActiveTab(getDefaultMealTab()));
-
-        // Fetch today's menu
         dispatch(fetchTodayMenu());
-
-        // Check evaluation
         checkExistingEvaluation(today);
     }, [dispatch, checkExistingEvaluation]);
 
-    // Fetch menu when date changes (but not on initial mount)
+    // Fetch menu on date change
     useEffect(() => {
         if (!selectedDate || !isInitializedRef.current) return;
-
-        // Skip if same date
         if (previousDateRef.current === selectedDate) return;
         previousDateRef.current = selectedDate;
 
@@ -217,30 +194,24 @@ const Dashboard = () => {
         checkExistingEvaluation(selectedDate);
     }, [selectedDate, dispatch, checkExistingEvaluation]);
 
-    // ✅ Menü verisi değiştiğinde puanları yükle
+    // Load ratings when menu changes
     useEffect(() => {
         if (menuData && menuData.length > 0) {
             loadMenuRatings(menuData);
         }
     }, [menuData, loadMenuRatings]);
 
-    // Generate calendar days (42 days for 6 weeks)
+    // Calendar days
     const calendarDays = useMemo(() => {
         const days = [];
         const monthStart = dayjs(currentMonth + '-01');
-
-        // Ayın ilk gününün haftanın hangi günü olduğunu bul
-        // dayjs.day(): 0=Pazar, 1=Pazartesi, ..., 6=Cumartesi
-        // Biz Pazartesi=0, Salı=1, ..., Pazar=6 istiyoruz
-        const firstDayOfWeek = monthStart.day(); // 0-6 (Pazar-Cumartesi)
-        const mondayBasedDay = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1; // Pazartesi=0 bazlı
-
-        // Grid'in başlangıcı: ayın 1'inden önceki Pazartesi
+        const firstDayOfWeek = monthStart.day();
+        const mondayBasedDay = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
         const startDay = monthStart.subtract(mondayBasedDay, 'day');
 
         for (let i = 0; i < 42; i++) {
             const date = startDay.add(i, 'day');
-            const dayOfWeek = date.day(); // 0=Pazar, 6=Cumartesi
+            const dayOfWeek = date.day();
 
             days.push({
                 date: date.format('YYYY-MM-DD'),
@@ -248,7 +219,7 @@ const Dashboard = () => {
                 isCurrentMonth: date.month() === monthStart.month(),
                 isToday: date.isSame(dayjs(), 'day'),
                 isSelected: date.format('YYYY-MM-DD') === selectedDate,
-                isWeekend: dayOfWeek === 0 || dayOfWeek === 6 // Pazar veya Cumartesi
+                isWeekend: dayOfWeek === 0 || dayOfWeek === 6
             });
         }
 
@@ -258,7 +229,6 @@ const Dashboard = () => {
     // Filter menu by meal time
     const filteredMenu = useMemo(() => {
         if (!menuData || menuData.length === 0) return [];
-
         const mealTime = activeTab === 'lunch' ? MEAL_TIMES.LUNCH : MEAL_TIMES.DINNER;
         return menuData.filter(item => item.mealTime === mealTime);
     }, [menuData, activeTab]);
@@ -266,7 +236,6 @@ const Dashboard = () => {
     // Group by category
     const groupedMenu = useMemo(() => {
         const groups = {};
-
         filteredMenu.forEach(item => {
             const category = item.category || 'Diğer';
             if (!groups[category]) {
@@ -275,7 +244,6 @@ const Dashboard = () => {
             groups[category].push(item);
         });
 
-        // Sort by category order
         const categoryOrder = MEAL_CATEGORIES.map(c => c.label);
         return Object.entries(groups).sort((a, b) => {
             const indexA = categoryOrder.indexOf(a[0]);
@@ -284,7 +252,7 @@ const Dashboard = () => {
         });
     }, [filteredMenu]);
 
-    // Calculate total calories
+    // Total calories
     const totalCalories = useMemo(() => {
         return filteredMenu.reduce((total, item) => total + (item.calories || item.calorie || 0), 0);
     }, [filteredMenu]);
@@ -311,7 +279,7 @@ const Dashboard = () => {
         dispatch(setSelectedDate(dateString));
     }, [dispatch]);
 
-    // Search handling
+    // Search
     const handleSearch = useCallback((value) => {
         dispatch(setSearchTerm(value));
         if (value && value.trim().length >= 2) {
@@ -329,60 +297,51 @@ const Dashboard = () => {
         dispatch(setSearchTerm(''));
     }, [dispatch]);
 
-    // Open rating modal
+    // Rating modal
     const openRatingModal = useCallback((item) => {
         setSelectedMenuItem(item);
         setShowRatingModal(true);
     }, []);
 
-    // Close rating modal
     const closeRatingModal = useCallback(() => {
         setShowRatingModal(false);
         setSelectedMenuItem(null);
     }, []);
 
-    // Handle menu update after rating
     const handleMenuUpdate = useCallback(() => {
         if (selectedDate) {
             dispatch(fetchMenuByDate(selectedDate));
         }
-        // Puanları yeniden yükle
         if (menuData && menuData.length > 0) {
             loadMenuRatings(menuData);
         }
     }, [dispatch, selectedDate, menuData, loadMenuRatings]);
 
-    // Handle day evaluation update
     const handleEvaluationUpdate = useCallback(() => {
         if (selectedDate) {
             checkExistingEvaluation(selectedDate);
         }
     }, [selectedDate, checkExistingEvaluation]);
 
-    // Get month title
+    // Month title
     const getMonthTitle = useCallback(() => {
         const monthDate = dayjs(currentMonth + '-01');
         return `${MONTH_NAMES[monthDate.month()]} ${monthDate.year()}`;
     }, [currentMonth]);
 
-    // Check if selected date is today
+    // Is today selected
     const isTodaySelected = useMemo(() => {
         return checkIsToday(selectedDate);
     }, [selectedDate]);
 
-    // Formatted selected date
+    // Formatted date
     const formattedSelectedDate = useMemo(() => {
         return dayjs(selectedDate).format('DD MMMM YYYY dddd');
     }, [selectedDate]);
 
-    // MonthlyMenuModal için year ve month değerlerini hesapla
-    const monthlyModalYear = useMemo(() => {
-        return dayjs(currentMonth + '-01').year();
-    }, [currentMonth]);
-
-    const monthlyModalMonth = useMemo(() => {
-        return dayjs(currentMonth + '-01').month(); // 0-11 indeksli
-    }, [currentMonth]);
+    // Monthly modal props
+    const monthlyModalYear = useMemo(() => dayjs(currentMonth + '-01').year(), [currentMonth]);
+    const monthlyModalMonth = useMemo(() => dayjs(currentMonth + '-01').month(), [currentMonth]);
 
     // Tab items
     const tabItems = [
@@ -390,18 +349,12 @@ const Dashboard = () => {
         { key: 'dinner', label: '🌙 Akşam Yemeği' }
     ];
 
-    /**
-     * Yemek için puan bilgisini al
-     * @param {number} menuId - Menü ID
-     * @returns {Object} { average, count, userRating, hasUserRated }
-     */
+    // Get rating info
     const getMenuRatingInfo = useCallback((menuId) => {
         return menuRatings[menuId] || { average: 0, count: 0, userRating: 0, hasUserRated: false };
     }, [menuRatings]);
 
-    /**
-     * Yıldız render fonksiyonu (eski koddaki gibi)
-     */
+    // Render stars
     const renderStars = useCallback((rating) => {
         return (
             <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -420,9 +373,7 @@ const Dashboard = () => {
         );
     }, []);
 
-    /**
-     * Buton metnini belirle (eski koddaki gibi)
-     */
+    // Button text
     const getButtonText = useCallback((hasUserRated, isToday) => {
         if (!isToday && hasUserRated) return 'Değerlendirildi';
         if (isToday && hasUserRated) return 'Düzenle';
@@ -432,7 +383,7 @@ const Dashboard = () => {
     return (
         <div style={{ padding: '24px' }}>
             <Row gutter={[24, 24]}>
-                {/* Left - Calendar */}
+                {/* Calendar */}
                 <Col xs={24} lg={8}>
                     <Card>
                         {/* Calendar Header */}
@@ -502,23 +453,17 @@ const Dashboard = () => {
 
                         {/* View Mode Buttons */}
                         <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
-                            <Button
-                                block
-                                onClick={() => dispatch(toggleWeeklyPopup())}
-                            >
+                            <Button block onClick={() => dispatch(toggleWeeklyPopup())}>
                                 📅 Haftalık
                             </Button>
-                            <Button
-                                block
-                                onClick={() => dispatch(toggleMonthlyPopup())}
-                            >
+                            <Button block onClick={() => dispatch(toggleMonthlyPopup())}>
                                 🗓️ Aylık
                             </Button>
                         </div>
                     </Card>
                 </Col>
 
-                {/* Right - Menu */}
+                {/* Menu */}
                 <Col xs={24} lg={16}>
                     <Card>
                         {/* Search */}
@@ -542,7 +487,9 @@ const Dashboard = () => {
                                 maxHeight: 200,
                                 overflow: 'auto'
                             }}>
-                                <Text strong style={{ marginBottom: 8, display: 'block' }}>Arama Sonuçları:</Text>
+                                <Text strong style={{ marginBottom: 8, display: 'block' }}>
+                                    Arama Sonuçları:
+                                </Text>
                                 {searchResults.map((item, idx) => (
                                     <div
                                         key={item.id || idx}
@@ -565,7 +512,7 @@ const Dashboard = () => {
                             </div>
                         )}
 
-                        {/* Selected Date Info */}
+                        {/* Selected Date */}
                         <div style={{ marginBottom: 16 }}>
                             <Space>
                                 <Title level={4} style={{ margin: 0 }}>
@@ -615,7 +562,7 @@ const Dashboard = () => {
                                     )}
                                 </div>
 
-                                {/* Menu Items by Category */}
+                                {/* Menu Items */}
                                 <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))' }}>
                                     {groupedMenu.map(([category, items]) => (
                                         <Card
@@ -646,8 +593,6 @@ const Dashboard = () => {
                                                             <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 4 }}>
                                                                 {item.foodName}
                                                             </Text>
-
-                                                            {/* Kalori */}
                                                             {(item.calories || item.calorie) > 0 && (
                                                                 <Tag icon={<FireOutlined />} color="orange" size="small">
                                                                     {item.calories || item.calorie} kcal
@@ -655,7 +600,7 @@ const Dashboard = () => {
                                                             )}
                                                         </div>
 
-                                                        {/* Puan ve Değerlendirme Butonu - Her zaman alt satırda */}
+                                                        {/* Puan ve Değerlendirme Butonu */}
                                                         <div style={{
                                                             display: 'flex',
                                                             alignItems: 'center',
@@ -663,17 +608,13 @@ const Dashboard = () => {
                                                             flexWrap: 'wrap',
                                                             gap: 8
                                                         }}>
-                                                            {/* Yıldız Ortalaması ve Oy Sayısı */}
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                                                 {ratingsLoading ? (
                                                                     <Spin size="small" />
                                                                 ) : (
                                                                     <>
                                                                         {renderStars(Math.round(ratingInfo.average))}
-                                                                        <Text
-                                                                            type="secondary"
-                                                                            style={{ fontSize: 12 }}
-                                                                        >
+                                                                        <Text type="secondary" style={{ fontSize: 12 }}>
                                                                             {ratingInfo.average > 0 ? (
                                                                                 <>
                                                                                     <Text strong style={{ color: '#faad14' }}>
@@ -682,14 +623,15 @@ const Dashboard = () => {
                                                                                     {' '}({ratingInfo.count})
                                                                                 </>
                                                                             ) : (
-                                                                                <span style={{ color: '#bfbfbf' }}>Henüz oy yok</span>
+                                                                                <span style={{ color: '#bfbfbf' }}>
+                                                                                    Henüz oy yok
+                                                                                </span>
                                                                             )}
                                                                         </Text>
                                                                     </>
                                                                 )}
                                                             </div>
 
-                                                            {/* Değerlendirme Butonu */}
                                                             <Tooltip
                                                                 title={
                                                                     !isTodaySelected
@@ -722,7 +664,7 @@ const Dashboard = () => {
                                     ))}
                                 </div>
 
-                                {/* Day Evaluation Button - Only for today */}
+                                {/* Day Evaluation Button */}
                                 {isTodaySelected && userId && (
                                     <Button
                                         type={hasExistingEvaluation ? 'default' : 'primary'}
@@ -731,7 +673,9 @@ const Dashboard = () => {
                                         style={{ marginTop: 16 }}
                                         block
                                     >
-                                        {hasExistingEvaluation ? 'Gün Değerlendirmesini Düzenle' : 'Günü Değerlendir'}
+                                        {hasExistingEvaluation
+                                            ? 'Gün Değerlendirmesini Düzenle'
+                                            : 'Günü Değerlendir'}
                                     </Button>
                                 )}
                             </>
@@ -761,7 +705,6 @@ const Dashboard = () => {
                 startDate={selectedDate}
             />
 
-            {/* MonthlyMenuModal'a year ve month ayrı ayrı gönder */}
             <MonthlyMenuModal
                 visible={showMonthlyPopup}
                 onClose={() => dispatch(toggleMonthlyPopup())}

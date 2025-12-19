@@ -1,9 +1,5 @@
 /**
  * WeeklyMenuModal.jsx - Haftalık Menü Modal
- *
- * Bir haftanın menüsünü öğle/akşam sekmeli olarak görüntüler.
- *
- * @module pages/Yemekhane/components/WeeklyMenuModal
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -17,8 +13,7 @@ import {
     Typography,
     Row,
     Col,
-    Badge,
-    Tooltip
+    Badge
 } from 'antd';
 import {
     CalendarOutlined,
@@ -37,16 +32,8 @@ import 'dayjs/locale/tr';
 
 dayjs.locale('tr');
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
-/**
- * WeeklyMenuModal - Haftalık Menü Modal
- *
- * @param {Object} props
- * @param {boolean} props.visible - Modal görünürlüğü
- * @param {Function} props.onClose - Modal kapatma
- * @param {string} props.startDate - Başlangıç tarihi (YYYY-MM-DD)
- */
 const WeeklyMenuModal = ({ visible, onClose, startDate }) => {
     const [loading, setLoading] = useState(false);
     const [weekData, setWeekData] = useState([]);
@@ -55,17 +42,24 @@ const WeeklyMenuModal = ({ visible, onClose, startDate }) => {
     // Get week days starting from Monday
     const getWeekDays = useCallback((date) => {
         const days = [];
-        const start = dayjs(date).startOf('week').add(1, 'day'); // Monday
+        const targetDate = dayjs(date);
+
+        // dayjs.day(): 0=Pazar, 1=Pazartesi, ..., 6=Cumartesi
+        const dayOfWeek = targetDate.day();
+        const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        const monday = targetDate.subtract(daysToMonday, 'day');
 
         for (let i = 0; i < 7; i++) {
-            const currentDate = start.add(i, 'day');
+            const currentDate = monday.add(i, 'day');
+            const currentDayOfWeek = currentDate.day();
+
             days.push({
                 date: currentDate.format('YYYY-MM-DD'),
-                dayName: DAY_NAMES_FULL[i] || currentDate.format('dddd'),
+                dayName: DAY_NAMES_FULL[i],
                 dayNumber: currentDate.format('D'),
                 month: currentDate.format('MMMM'),
                 isToday: currentDate.isSame(dayjs(), 'day'),
-                isWeekend: i >= 5
+                isWeekend: currentDayOfWeek === 0 || currentDayOfWeek === 6
             });
         }
         return days;
@@ -89,7 +83,6 @@ const WeeklyMenuModal = ({ visible, onClose, startDate }) => {
             return acc;
         }, {});
 
-        // Sort by category order
         const sortedGrouped = {};
         CATEGORY_ORDER.forEach(category => {
             if (grouped[category]) {
@@ -119,7 +112,6 @@ const WeeklyMenuModal = ({ visible, onClose, startDate }) => {
             const response = await mealMenuService.getMenusByDateRange(startDateStr, endDateStr);
             const menus = response?.data || response || [];
 
-            // Group by date
             const weekDataWithMenus = weekDays.map(day => {
                 const dayMenus = menus.filter(menu => {
                     const menuDate = dayjs(menu.menuDate).format('YYYY-MM-DD');
@@ -141,14 +133,12 @@ const WeeklyMenuModal = ({ visible, onClose, startDate }) => {
         }
     }, [startDate, getWeekDays]);
 
-    // Load data when modal opens
     useEffect(() => {
         if (visible && startDate) {
             loadWeekData();
         }
     }, [visible, startDate, loadWeekData]);
 
-    // Get week range title
     const getWeekRangeTitle = () => {
         if (weekData.length === 0) return 'Haftalık Menü';
         const start = weekData[0];
@@ -156,17 +146,16 @@ const WeeklyMenuModal = ({ visible, onClose, startDate }) => {
         return `${start.dayNumber} ${start.month} - ${end.dayNumber} ${end.month}`;
     };
 
-    // Render day card
     const renderDayCard = (day, mealType) => {
         const menus = mealType === 'lunch' ? day.lunch : day.dinner;
         const groupedMenu = groupMenuByCategory(menus);
         const categories = Object.keys(groupedMenu);
+        const totalCalories = menus.reduce((sum, item) => sum + (item.calories || item.calorie || 0), 0);
 
         return (
             <Card
                 key={`${day.date}-${mealType}`}
                 size="small"
-                className={`weekly-day-card ${day.isToday ? 'today' : ''} ${day.isWeekend ? 'weekend' : ''}`}
                 title={
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Text strong>{day.dayName}</Text>
@@ -174,128 +163,102 @@ const WeeklyMenuModal = ({ visible, onClose, startDate }) => {
                     </div>
                 }
                 extra={day.isToday && <Badge status="success" text="Bugün" />}
-                style={{ height: '100%' }}
+                style={{
+                    height: '100%',
+                    borderColor: day.isToday ? '#1890ff' : undefined,
+                    backgroundColor: day.isWeekend ? '#fafafa' : undefined
+                }}
             >
                 {menus.length === 0 ? (
                     <Empty
                         description="Menü yok"
                         image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        style={{ margin: '20px 0' }}
                     />
                 ) : (
-                    <div className="weekly-menu-content">
+                    <div>
                         {categories.map(category => (
-                            <div key={category} style={{ marginBottom: 12 }}>
-                                <Text type="secondary" strong style={{ fontSize: 11 }}>
+                            <div key={category} style={{ marginBottom: 8 }}>
+                                <Tag color={getCategoryColor(category)} style={{ marginBottom: 4 }}>
                                     {getCategoryIcon(category)} {category}
-                                </Text>
-                                <div style={{ marginTop: 4 }}>
-                                    {groupedMenu[category].map(item => (
-                                        <div key={item.id} style={{
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            padding: '4px 0',
-                                            borderBottom: '1px dashed #f0f0f0'
-                                        }}>
-                                            <Text style={{ fontSize: 12 }}>{item.foodName}</Text>
-                                            <Tooltip title="Kalori">
-                                                <Tag
-                                                    color="orange"
-                                                    style={{ fontSize: 10, marginLeft: 4 }}
-                                                >
-                                                    {item.calorie || 0}
-                                                </Tag>
-                                            </Tooltip>
+                                </Tag>
+                                <div style={{ paddingLeft: 8 }}>
+                                    {groupedMenu[category].map((item, idx) => (
+                                        <div
+                                            key={item.id || idx}
+                                            style={{
+                                                fontSize: 12,
+                                                padding: '2px 0',
+                                                borderBottom: idx < groupedMenu[category].length - 1 ? '1px dashed #f0f0f0' : 'none'
+                                            }}
+                                        >
+                                            <Text>{item.foodName}</Text>
+                                            {(item.calories || item.calorie) > 0 && (
+                                                <Text type="secondary" style={{ marginLeft: 8, fontSize: 11 }}>
+                                                    {item.calories || item.calorie} kcal
+                                                </Text>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         ))}
+
+                        {totalCalories > 0 && (
+                            <div style={{
+                                marginTop: 8,
+                                paddingTop: 8,
+                                borderTop: '1px solid #f0f0f0',
+                                textAlign: 'right'
+                            }}>
+                                <Tag icon={<FireOutlined />} color="orange">
+                                    Toplam: {totalCalories} kcal
+                                </Tag>
+                            </div>
+                        )}
                     </div>
                 )}
             </Card>
         );
     };
 
-    // Tab items
     const tabItems = [
-        {
-            key: 'lunch',
-            label: '🍲 Öğle Yemeği',
-            children: (
-                <Row gutter={[16, 16]}>
-                    {weekData.map(day => (
-                        <Col key={day.date} xs={24} sm={12} md={8} lg={8} xl={6}>
-                            {renderDayCard(day, 'lunch')}
-                        </Col>
-                    ))}
-                </Row>
-            )
-        },
-        {
-            key: 'dinner',
-            label: '🍽️ Akşam Yemeği',
-            children: (
-                <Row gutter={[16, 16]}>
-                    {weekData.map(day => (
-                        <Col key={day.date} xs={24} sm={12} md={8} lg={8} xl={6}>
-                            {renderDayCard(day, 'dinner')}
-                        </Col>
-                    ))}
-                </Row>
-            )
-        }
+        { key: 'lunch', label: '🍽️ Öğle Yemeği' },
+        { key: 'dinner', label: '🌙 Akşam Yemeği' }
     ];
 
     return (
         <Modal
             title={
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <CalendarOutlined style={{ fontSize: 20, color: '#1890ff' }} />
-                    <div>
-                        <Title level={4} style={{ margin: 0 }}>Haftalık Menü</Title>
-                        <Text type="secondary">{getWeekRangeTitle()}</Text>
-                    </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <CalendarOutlined />
+                    <span>Haftalık Menü</span>
+                    <Text type="secondary" style={{ fontSize: 14, fontWeight: 'normal' }}>
+                        ({getWeekRangeTitle()})
+                    </Text>
                 </div>
             }
             open={visible}
             onCancel={onClose}
             footer={null}
             width={1200}
-            centered
             destroyOnClose
-            styles={{
-                body: { maxHeight: '70vh', overflowY: 'auto' }
-            }}
         >
             <Spin spinning={loading}>
                 <Tabs
                     activeKey={activeTab}
                     onChange={setActiveTab}
                     items={tabItems}
-                    size="large"
                 />
-            </Spin>
 
-            <style>{`
-                .weekly-day-card {
-                    border-radius: 8px;
-                    transition: all 0.3s;
-                }
-                .weekly-day-card:hover {
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                }
-                .weekly-day-card.today {
-                    border: 2px solid #52c41a;
-                }
-                .weekly-day-card.weekend .ant-card-head {
-                    background: #fff1f0;
-                }
-                .weekly-menu-content {
-                    max-height: 300px;
-                    overflow-y: auto;
-                }
-            `}</style>
+                <Row gutter={[12, 12]}>
+                    {weekData.map(day => (
+                        <Col key={day.date} xs={24} sm={12} md={8} lg={24 / 7}>
+                            {renderDayCard(day, activeTab)}
+                        </Col>
+                    ))}
+                </Row>
+            </Spin>
         </Modal>
     );
 };
