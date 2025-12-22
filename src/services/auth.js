@@ -1,5 +1,15 @@
+/**
+ * authService - Authentication işlemleri
+ *
+ * ✅ FIX v3: Login sonrası hem cookie HEM localStorage'a kaydet
+ * Bu sayede token kesinlikle okunabilir olacak
+ *
+ * @module services/auth
+ */
+
 import axios from 'axios'
 import { API_ENDPOINTS } from '@/constants/api'
+import { STORAGE_KEYS } from '@/constants/config'
 import { cookieUtils } from '@/utils/cookies'
 
 /**
@@ -21,6 +31,8 @@ const createFormData = (data) => {
 export const authService = {
     /**
      * login - Kullanıcı giriş işlemi
+     *
+     * ✅ FIX: Hem cookie HEM localStorage'a kaydet
      */
     async login(credentials) {
         try {
@@ -39,7 +51,10 @@ export const authService = {
             if (response.data.isSuccess) {
                 const result = response.data.result
 
-                // User data - PROJECTS DAHİL EDİLDİ!
+                console.log('✅ Login API başarılı')
+                console.log('🔑 Token alındı:', result.token ? 'VAR' : 'YOK')
+
+                // User data
                 const userData = {
                     id: result.id,
                     fullName: result.fullName,
@@ -48,11 +63,10 @@ export const authService = {
                     phoneNumber: result.phoneNumber,
                     profilePhoto: result.profilePhoto || null,
                     employeeId: result.employeeId,
-                    // ✅ PROJECTS EKLENDİ - Bu olmadan roller çalışmaz!
                     projects: result.projects || [],
                 }
 
-                // Cookie'ye kaydet
+                // ✅ FIX 1: Cookie'ye kaydet
                 const authCookieData = {
                     authenticateResult: true,
                     authToken: result.token,
@@ -60,13 +74,19 @@ export const authService = {
                     accessTokenExpireDate: result.expirationDate,
                     user: userData
                 }
-
                 cookieUtils.setAuthCookie(authCookieData)
 
-                console.log('✅ Login successful')
-                console.log('📋 User projects:', userData.projects)
+                // ✅ FIX 2: localStorage'a da kaydet (BACKUP)
+                localStorage.setItem(STORAGE_KEYS.TOKEN, result.token)
+                localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(userData))
+                console.log('✅ Token localStorage\'a da kaydedildi')
 
-                // Redux store için response
+                // Token'ın kaydedildiğini doğrula
+                const savedToken = cookieUtils.getToken()
+                const localToken = localStorage.getItem(STORAGE_KEYS.TOKEN)
+                console.log('🔍 Cookie\'den token:', savedToken ? 'VAR' : 'YOK')
+                console.log('🔍 localStorage\'dan token:', localToken ? 'VAR' : 'YOK')
+
                 return {
                     user: userData,
                     accessToken: result.token,
@@ -76,6 +96,7 @@ export const authService = {
                 throw new Error(response.data.message || 'Login failed')
             }
         } catch (error) {
+            console.error('❌ Login hatası:', error.message)
             if (error.response) {
                 throw new Error(error.response.data?.message || 'Login failed')
             }
@@ -88,7 +109,7 @@ export const authService = {
      */
     async validateToken(token) {
         try {
-            console.log('🔄 Validating token...')
+            console.log('🔄 Token doğrulanıyor...')
 
             const formData = createFormData({ token })
 
@@ -104,10 +125,8 @@ export const authService = {
 
             if (response.data.isSuccess) {
                 const result = response.data.result
+                console.log('✅ Token doğrulandı')
 
-                console.log('✅ Token validated successfully')
-
-                // User data + projects döndür
                 return {
                     id: result.id,
                     fullName: result.fullName,
@@ -119,11 +138,11 @@ export const authService = {
                     projects: result.projects || [],
                 }
             } else {
-                console.error('❌ Token validation failed:', response.data.message)
+                console.error('❌ Token doğrulama başarısız:', response.data.message)
                 return null
             }
         } catch (error) {
-            console.error('❌ Validate token error:', error.message)
+            console.error('❌ Token doğrulama hatası:', error.message)
             return null
         }
     },
@@ -132,8 +151,15 @@ export const authService = {
      * logout - Kullanıcı çıkış işlemi
      */
     async logout() {
+        // Cookie'yi temizle
         cookieUtils.clearAuthCookie()
-        console.log('✅ Logout successful')
+
+        // localStorage'ı da temizle
+        localStorage.removeItem(STORAGE_KEYS.TOKEN)
+        localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN)
+        localStorage.removeItem(STORAGE_KEYS.USER)
+
+        console.log('✅ Çıkış yapıldı')
         return true
     },
 
@@ -163,7 +189,10 @@ export const authService = {
                 response.data.result.expirationDate
             )
 
-            console.log('✅ Token refreshed')
+            // localStorage'ı da güncelle
+            localStorage.setItem(STORAGE_KEYS.TOKEN, newToken)
+
+            console.log('✅ Token yenilendi')
         }
 
         return response.data
@@ -192,7 +221,7 @@ export const authService = {
             )
             return JSON.parse(jsonPayload)
         } catch (error) {
-            console.error('Token decode error:', error)
+            console.error('Token decode hatası:', error)
             return null
         }
     },

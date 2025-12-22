@@ -2,8 +2,11 @@
  * Lookup Servis Modülü
  * Referans verileri (dropdown/select) API servisi
  *
- * ✅ DÜZELTME: Tüm isteklerde axiosInstance kullanılıyor
- * Bu sayede token otomatik olarak header'a ekleniyor
+ * ✅ FIX: Token handling düzeltildi
+ * - getAuthToken import edildi
+ * - Farklı domain isteklerinde token doğru ekleniyor
+ *
+ * @module services/lookup
  */
 
 import axiosInstance, { getAuthToken } from '@/utils/axiosInstance';
@@ -33,6 +36,7 @@ export const lookupService = {
     async getCountries() {
         try {
             const response = await axiosInstance.get(API_ENDPOINTS.GET_COUNTRIES);
+
             if (Array.isArray(response)) {
                 return response;
             }
@@ -44,7 +48,7 @@ export const lookupService = {
             }
             return response || [];
         } catch (error) {
-            console.error('getCountries error:', error);
+            console.error('❌ getCountries error:', error);
             throw error;
         }
     },
@@ -59,6 +63,7 @@ export const lookupService = {
     async getHotels() {
         try {
             const response = await axiosInstance.get(API_ENDPOINTS.GET_HOTELS);
+
             if (Array.isArray(response)) {
                 return response;
             }
@@ -70,7 +75,7 @@ export const lookupService = {
             }
             return response || [];
         } catch (error) {
-            console.error('getHotels error:', error);
+            console.error('❌ getHotels error:', error);
             throw error;
         }
     },
@@ -85,6 +90,7 @@ export const lookupService = {
     async getAirlines() {
         try {
             const response = await axiosInstance.get(API_ENDPOINTS.GET_AIRLINES);
+
             if (Array.isArray(response)) {
                 return response;
             }
@@ -96,7 +102,7 @@ export const lookupService = {
             }
             return response || [];
         } catch (error) {
-            console.error('getAirlines error:', error);
+            console.error('❌ getAirlines error:', error);
             throw error;
         }
     },
@@ -106,25 +112,31 @@ export const lookupService = {
      *
      * API Endpoint: GET https://umapi.dokugate.com/api/User/get-all
      *
-     * ✅ DÜZELTME: Token artık doğru şekilde alınıyor
-     * getAuthToken() fonksiyonu cookie ve localStorage'dan doğru token'ı alır
+     * ✅ FIX: Token artık doğru şekilde alınıyor ve ekleniyor
      *
      * @returns {Promise<Array>} Kullanıcı listesi
      */
     async getUsers() {
         try {
-            // ✅ DÜZELTME: Token'ı merkezi fonksiyondan al
+            // ✅ Token'ı merkezi fonksiyondan al
             const token = getAuthToken();
 
             if (!token) {
                 console.error('❌ getUsers: Token bulunamadı!');
-                throw new Error('Authentication token not found');
+                console.error('📋 Debug: Cookie kontrolü yapılıyor...');
+
+                // Debug için cookie durumunu logla
+                if (typeof document !== 'undefined') {
+                    console.error('📋 Raw cookies:', document.cookie ? 'Cookies exist' : 'No cookies');
+                }
+
+                throw new Error('Authentication token not found. Please login again.');
             }
 
             console.log('🔐 getUsers: Token alındı, istek gönderiliyor...');
+            console.log('   └─ Token preview:', token.substring(0, 30) + '...');
 
             // Farklı domain olduğu için axios instance yerine direkt axios kullan
-            // Ama token'ı doğru şekilde ekle
             const response = await axios.get(API_ENDPOINTS.GET_USERS, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -132,6 +144,8 @@ export const lookupService = {
                 },
                 timeout: API_CONFIG.TIMEOUT,
             });
+
+            console.log('✅ getUsers: Başarılı response alındı');
 
             const data = response.data;
 
@@ -148,10 +162,16 @@ export const lookupService = {
         } catch (error) {
             console.error('❌ getUsers error:', error);
 
-            // 401 hatası için özel log
+            // 401 hatası için özel handling
             if (error.response?.status === 401) {
-                console.error('❌ 401 Unauthorized - Token geçersiz veya eksik');
+                console.error('❌ 401 Unauthorized - Token geçersiz veya süresi dolmuş');
                 console.error('📋 Request headers:', error.config?.headers);
+                throw new Error('Oturum süresi dolmuş. Lütfen tekrar giriş yapın.');
+            }
+
+            // Network hatası
+            if (error.code === 'ECONNABORTED') {
+                throw new Error('İstek zaman aşımına uğradı. Lütfen tekrar deneyin.');
             }
 
             throw error;

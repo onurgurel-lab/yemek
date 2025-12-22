@@ -1,10 +1,9 @@
 /**
  * ProtectedRoute.jsx - Route Koruma Komponentleri
  *
- * ROL BAZLI ERİŞİM KONTROLÜ:
- * - AdminRoute: Menü Yönetimi, Excel Yükle (SADECE Admin)
- * - ReportsRoute: Raporlar (Admin VEYA RaporAdmin)
- * - PrivateRoute: Tüm giriş yapmış kullanıcılar
+ * ✅ FIX v3: Sayfa yenilemede login'e yönlendirme sorunu çözüldü
+ * - Cookie/localStorage'dan direkt auth kontrolü
+ * - initialized beklemeden önce token kontrolü
  *
  * @module components/ProtectedRoute
  */
@@ -15,6 +14,49 @@ import { Spin, Result, Button } from 'antd';
 import { useSelector } from 'react-redux';
 import { useUserRoles } from '@/hooks/useUserRoles';
 import { ROUTES } from '@/constants/routes';
+import { STORAGE_KEYS } from '@/constants/config';
+
+// ==================== INLINE TOKEN CHECK ====================
+
+/**
+ * hasValidToken - Cookie veya localStorage'da geçerli token var mı
+ * Redux state'inden bağımsız kontrol
+ */
+const hasValidToken = () => {
+    try {
+        // 1. Cookie kontrolü
+        const cookieString = document.cookie;
+        if (cookieString && cookieString.includes('authUser=')) {
+            const cookies = cookieString.split(';');
+            for (let cookie of cookies) {
+                cookie = cookie.trim();
+                if (cookie.startsWith('authUser=')) {
+                    const encodedValue = cookie.substring(9);
+                    if (encodedValue) {
+                        const decodedValue = decodeURIComponent(encodedValue);
+                        const parsed = JSON.parse(decodedValue);
+                        if (parsed.authToken) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. localStorage kontrolü
+        const localToken = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        if (localToken) {
+            return true;
+        }
+
+        return false;
+    } catch (error) {
+        console.error('Token check error:', error);
+        return false;
+    }
+};
+
+// ==================== LOADING COMPONENTS ====================
 
 /**
  * PageLoading - Sayfa yüklenirken gösterilecek spinner
@@ -91,46 +133,69 @@ const UnauthorizedResult = ({
     );
 };
 
+// ==================== ROUTE COMPONENTS ====================
+
 /**
  * PrivateRoute - Sadece giriş yapmış kullanıcılar erişebilir
+ *
+ * ✅ FIX: Önce token varlığını kontrol et, sonra Redux state'e bak
  */
 export const PrivateRoute = ({ children }) => {
     const { isAuthenticated, loading, initialized } = useSelector((state) => state.auth);
 
-    // Sadece ilk yükleme sırasında loading göster
-    // initialized false VE loading true ise bekle
-    if (!initialized && loading) {
+    // ✅ FIX: Redux state henüz hazır değilse, direkt token kontrolü yap
+    const tokenExists = hasValidToken();
+
+    // Durum 1: Redux initialized değil ama token var → loading göster (kısa süre)
+    if (!initialized && tokenExists) {
         return <FullPageLoading />;
     }
 
-    // Giriş yapılmamışsa login'e yönlendir
-    // initialized true olduğunda (logout sonrası dahil) direkt yönlendir
-    if (!isAuthenticated) {
+    // Durum 2: Redux initialized değil ve token yok → login'e git
+    if (!initialized && !tokenExists) {
         return <Navigate to={ROUTES.LOGIN} replace />;
     }
 
+    // Durum 3: Redux initialized ve loading → loading göster
+    if (initialized && loading) {
+        return <FullPageLoading />;
+    }
+
+    // Durum 4: Redux initialized, authenticated değil ve token yok → login'e git
+    if (!isAuthenticated && !tokenExists) {
+        return <Navigate to={ROUTES.LOGIN} replace />;
+    }
+
+    // Durum 5: Token var (Redux veya cookie/localStorage) → children göster
     return children;
 };
 
 /**
  * AdminRoute - SADECE Admin kullanıcılar erişebilir
- * Menü Yönetimi ve Excel Yükle sayfaları için kullanılır
  */
 export const AdminRoute = ({ children }) => {
     const { isAuthenticated, loading, initialized } = useSelector((state) => state.auth);
     const { isAdmin } = useUserRoles();
+    const tokenExists = hasValidToken();
 
-    // Sadece ilk yükleme sırasında loading göster
-    if (!initialized && loading) {
+    // Token yoksa veya initialized değilse
+    if (!initialized && tokenExists) {
         return <FullPageLoading />;
     }
 
-    // Giriş yapılmamışsa login'e yönlendir
-    if (!isAuthenticated) {
+    if (!initialized && !tokenExists) {
         return <Navigate to={ROUTES.LOGIN} replace />;
     }
 
-    // Admin değilse yetkisiz erişim uyarısı göster
+    if (initialized && loading) {
+        return <FullPageLoading />;
+    }
+
+    if (!isAuthenticated && !tokenExists) {
+        return <Navigate to={ROUTES.LOGIN} replace />;
+    }
+
+    // Admin değilse yetkisiz erişim
     if (!isAdmin) {
         return (
             <UnauthorizedResult
@@ -146,23 +211,28 @@ export const AdminRoute = ({ children }) => {
 
 /**
  * ReportsRoute - Admin VEYA RaporAdmin kullanıcılar erişebilir
- * Sadece Raporlar sayfası için kullanılır
  */
 export const ReportsRoute = ({ children }) => {
     const { isAuthenticated, loading, initialized } = useSelector((state) => state.auth);
     const { canViewReports } = useUserRoles();
+    const tokenExists = hasValidToken();
 
-    // Sadece ilk yükleme sırasında loading göster
-    if (!initialized && loading) {
+    if (!initialized && tokenExists) {
         return <FullPageLoading />;
     }
 
-    // Giriş yapılmamışsa login'e yönlendir
-    if (!isAuthenticated) {
+    if (!initialized && !tokenExists) {
         return <Navigate to={ROUTES.LOGIN} replace />;
     }
 
-    // Rapor görüntüleme yetkisi yoksa uyarı göster
+    if (initialized && loading) {
+        return <FullPageLoading />;
+    }
+
+    if (!isAuthenticated && !tokenExists) {
+        return <Navigate to={ROUTES.LOGIN} replace />;
+    }
+
     if (!canViewReports) {
         return (
             <UnauthorizedResult
@@ -177,27 +247,29 @@ export const ReportsRoute = ({ children }) => {
 };
 
 /**
- * PublicRoute - Sadece giriş yapmamış kullanıcılar erişebilir
- * Login sayfası için kullanılır
+ * PublicRoute - Sadece giriş yapmamış kullanıcılar erişebilir (Login sayfası)
+ *
+ * ✅ FIX: Token varsa dashboard'a yönlendir
  */
 export const PublicRoute = ({ children }) => {
     const { isAuthenticated, loading, initialized } = useSelector((state) => state.auth);
+    const tokenExists = hasValidToken();
 
-    // Sadece ilk yükleme sırasında loading göster
-    if (!initialized && loading) {
-        return <FullPageLoading />;
+    // Token varsa (giriş yapılmış) dashboard'a yönlendir
+    if (tokenExists || isAuthenticated) {
+        return <Navigate to={ROUTES.DASHBOARD} replace />;
     }
 
-    // Zaten giriş yapmışsa dashboard'a yönlendir
-    if (isAuthenticated) {
-        return <Navigate to={ROUTES.DASHBOARD} replace />;
+    // Loading durumunda bekle
+    if (!initialized && loading) {
+        return <FullPageLoading />;
     }
 
     return children;
 };
 
 /**
- * RoleBasedRoute - Dinamik rol kontrolü için genel component
+ * RoleBasedRoute - Dinamik rol kontrolü
  */
 export const RoleBasedRoute = ({
                                    children,
@@ -206,18 +278,24 @@ export const RoleBasedRoute = ({
                                }) => {
     const { isAuthenticated, loading, initialized } = useSelector((state) => state.auth);
     const { hasAnyRole } = useUserRoles();
+    const tokenExists = hasValidToken();
 
-    // Sadece ilk yükleme sırasında loading göster
-    if (!initialized && loading) {
+    if (!initialized && tokenExists) {
         return <FullPageLoading />;
     }
 
-    // Giriş yapılmamışsa login'e yönlendir
-    if (!isAuthenticated) {
+    if (!initialized && !tokenExists) {
         return <Navigate to={ROUTES.LOGIN} replace />;
     }
 
-    // Gerekli rollerden hiçbirine sahip değilse uyarı göster
+    if (initialized && loading) {
+        return <FullPageLoading />;
+    }
+
+    if (!isAuthenticated && !tokenExists) {
+        return <Navigate to={ROUTES.LOGIN} replace />;
+    }
+
     if (!hasAnyRole(allowedRoles)) {
         return (
             <UnauthorizedResult
@@ -230,6 +308,8 @@ export const RoleBasedRoute = ({
 
     return children;
 };
+
+// ==================== DEFAULT EXPORT ====================
 
 export default {
     PrivateRoute,

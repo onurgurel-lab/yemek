@@ -1,27 +1,63 @@
 /**
  * authSlice.js - Authentication Redux Slice
  *
- * Login, logout ve validate işlemlerini yönetir.
- * User objesine hedef projenin rollerini ekler.
+ * ✅ FIX v3: Sayfa yenilemede auth state korunuyor
+ * - getInitialState cookie'yi doğru okuyor
+ * - initialized true başlıyor eğer cookie varsa
+ * - Token localStorage'dan da okunuyor (backup)
  *
  * @module store/slices/authSlice
  */
 
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { authService } from '@/services/auth';
-import { cookieUtils } from '@/utils/cookies';
+import { STORAGE_KEYS } from '@/constants/config';
 
 // Hedef proje ismi (.env'den)
 const TARGET_PROJECT = import.meta.env.VITE_API_USER_ROLES || 'Yemekhane';
 
+// ==================== INLINE COOKIE OKUMA ====================
+
+/**
+ * readAuthCookieInline - Cookie'yi doğru şekilde oku
+ * cookieUtils import etmeden çalışır (circular dependency önleme)
+ */
+const readAuthCookieInline = () => {
+    try {
+        if (typeof document === 'undefined') return null;
+
+        const cookieString = document.cookie;
+        if (!cookieString) return null;
+
+        const cookies = cookieString.split(';');
+
+        for (let i = 0; i < cookies.length; i++) {
+            let cookie = cookies[i].trim();
+
+            if (cookie.startsWith('authUser=')) {
+                const encodedValue = cookie.substring(9);
+                if (!encodedValue) return null;
+
+                const decodedValue = decodeURIComponent(encodedValue);
+                return JSON.parse(decodedValue);
+            }
+        }
+
+        return null;
+    } catch (error) {
+        console.error('❌ Cookie okuma hatası (inline):', error.message);
+        return null;
+    }
+};
+
+// ==================== HELPER FONKSİYONLAR ====================
+
 /**
  * extractUserRoles - Kullanıcının hedef projedeki rollerini çıkarır
- * @param {Object} user - Kullanıcı objesi
- * @returns {string[]} Roller dizisi
  */
 const extractUserRoles = (user) => {
     if (!user?.projects || !Array.isArray(user.projects)) {
-        console.log('[extractUserRoles] No projects found, user:', user);
+        console.log('[extractUserRoles] No projects found');
         return [];
     }
 
@@ -30,7 +66,7 @@ const extractUserRoles = (user) => {
     );
 
     if (!project) {
-        console.log(`[extractUserRoles] Project "${TARGET_PROJECT}" not found in:`, user.projects);
+        console.log(`[extractUserRoles] Project "${TARGET_PROJECT}" not found`);
         return [];
     }
 
@@ -39,14 +75,35 @@ const extractUserRoles = (user) => {
     return roles;
 };
 
+// ==================== INITIAL STATE ====================
+
 /**
- * getInitialState - Cookie'den initial state oluştur
+ * getInitialState - Cookie ve localStorage'dan initial state oluştur
+ *
+ * ✅ FIX: Sayfa yenilemede state korunuyor
  */
 const getInitialState = () => {
-    const authCookie = cookieUtils.getAuthCookie();
-    const isAuthenticated = !!(authCookie?.authToken && authCookie?.authenticateResult);
+    console.log('🔄 getInitialState çalışıyor...');
 
-    // Cookie'deki user'a rolleri ekle
+    // 1. Cookie'den oku
+    const authCookie = readAuthCookieInline();
+
+    // 2. localStorage'dan token oku (backup)
+    const localToken = typeof localStorage !== 'undefined'
+        ? localStorage.getItem(STORAGE_KEYS.TOKEN)
+        : null;
+
+    // 3. Token var mı kontrol et
+    const token = authCookie?.authToken || localToken || null;
+    const hasValidAuth = !!(token && (authCookie?.authenticateResult !== false));
+
+    console.log('📋 Initial state debug:');
+    console.log('   ├─ Cookie token:', authCookie?.authToken ? 'VAR' : 'YOK');
+    console.log('   ├─ localStorage token:', localToken ? 'VAR' : 'YOK');
+    console.log('   ├─ Final token:', token ? 'VAR' : 'YOK');
+    console.log('   └─ hasValidAuth:', hasValidAuth);
+
+    // 4. User bilgisini al ve rolleri ekle
     let user = authCookie?.user || null;
     if (user) {
         user = {
@@ -55,13 +112,16 @@ const getInitialState = () => {
         };
     }
 
+    // 5. State döndür
+    // ✅ ÖNEMLİ: Token varsa initialized TRUE olmalı
+    // Bu sayede ProtectedRoute hemen loading göstermek yerine auth kontrolü yapabilir
     return {
         user: user,
-        token: authCookie?.authToken || null,
-        isAuthenticated,
+        token: token,
+        isAuthenticated: hasValidAuth,
         loading: false,
         error: null,
-        initialized: false,
+        initialized: hasValidAuth, // ✅ Token varsa initialized true
     };
 };
 
@@ -70,26 +130,40 @@ const initialState = getInitialState();
 // ==================== ASYNC THUNKS ====================
 
 /**
- * validateAndLoadUser - Cookie'deki token'ı validate et
+ * validateAndLoadUser - Token'ı validate et ve user bilgilerini yükle
  */
 export const validateAndLoadUser = createAsyncThunk(
     'auth/validateAndLoadUser',
-    async (_, { rejectWithValue }) => {
+    async (_, { rejectWithValue, getState }) => {
         try {
-            const authCookie = cookieUtils.getAuthCookie();
+            // Mevcut state'i kontrol et
+            const currentState = getState().auth;
 
-            if (!authCookie || !authCookie.authToken) {
-                console.log('ℹ️ No token in cookie, skipping validation');
+            // Zaten authenticated ve user varsa skip et
+            if (currentState.isAuthenticated && currentState.user && currentState.token) {
+                console.log('✅ Already authenticated, skipping validation');
+                return {
+                    user: currentState.user,
+                    token: currentState.token,
+                };
+            }
+
+            // Cookie'den token al
+            const authCookie = readAuthCookieInline();
+            const localToken = localStorage.getItem(STORAGE_KEYS.TOKEN);
+            const token = authCookie?.authToken || localToken;
+
+            if (!token) {
+                console.log('ℹ️ No token found, skipping validation');
                 return null;
             }
 
-            console.log('🔄 Validating token from cookie...');
+            console.log('🔄 Validating token...');
 
             // Token'ı validate et
-            const validateResult = await authService.validateToken(authCookie.authToken);
+            const validateResult = await authService.validateToken(token);
 
             if (validateResult) {
-                // Rolleri ekle
                 const roles = extractUserRoles(validateResult);
                 const userWithRoles = {
                     ...validateResult,
@@ -97,35 +171,37 @@ export const validateAndLoadUser = createAsyncThunk(
                 };
 
                 console.log('✅ Token validated successfully');
-                console.log('📋 User roles:', roles);
-
-                // Cookie'deki user bilgisini güncelle
-                cookieUtils.setAuthCookie({
-                    ...authCookie,
-                    user: userWithRoles
-                });
 
                 return {
                     user: userWithRoles,
-                    token: authCookie.authToken,
+                    token: token,
                 };
             }
 
             // Validate başarısız - cookie'deki bilgileri kullan
-            console.warn('⚠️ Validate failed, using cookie data');
+            console.warn('⚠️ Validate failed, using cached data');
 
-            const user = authCookie.user || {};
-            const roles = extractUserRoles(user);
+            if (authCookie?.user) {
+                const user = authCookie.user;
+                const roles = extractUserRoles(user);
 
-            return {
-                user: {
-                    ...user,
-                    roles: roles
-                },
-                token: authCookie.authToken,
-            };
+                return {
+                    user: { ...user, roles },
+                    token: token,
+                };
+            }
+
+            return null;
         } catch (error) {
-            console.error('❌ Critical error in validateAndLoadUser:', error);
+            console.error('❌ validateAndLoadUser error:', error);
+            // Hata olsa bile mevcut cookie verilerini kullan
+            const authCookie = readAuthCookieInline();
+            if (authCookie?.authToken && authCookie?.user) {
+                return {
+                    user: { ...authCookie.user, roles: extractUserRoles(authCookie.user) },
+                    token: authCookie.authToken,
+                };
+            }
             return rejectWithValue(error.message || 'Initialization failed');
         }
     }
@@ -139,17 +215,14 @@ export const login = createAsyncThunk(
     async (credentials, { rejectWithValue }) => {
         try {
             const response = await authService.login(credentials);
-            console.log('✅ Login thunk response:', response);
-            console.log('📋 User from login:', response?.user);
+            console.log('✅ Login successful');
 
-            // User'a rolleri ekle
             if (response && response.user) {
                 const roles = extractUserRoles(response.user);
                 response.user = {
                     ...response.user,
                     roles: roles
                 };
-                console.log('📋 Login user with roles:', response.user);
             }
 
             return response;
@@ -172,7 +245,6 @@ export const logout = createAsyncThunk(
             return null;
         } catch (error) {
             console.error('❌ Logout failed:', error.message);
-            // Hata olsa bile logout yap
             return null;
         }
     }
@@ -193,33 +265,6 @@ export const refreshToken = createAsyncThunk(
     }
 );
 
-/**
- * checkTokenExpiry - Token süresi kontrolü
- */
-export const checkTokenExpiry = createAsyncThunk(
-    'auth/checkExpiry',
-    async (_, { getState, dispatch }) => {
-        const state = getState();
-        const token = state.auth.token;
-
-        if (token) {
-            const decoded = authService.decodeToken(token);
-            if (decoded && decoded.exp) {
-                const expiryTime = decoded.exp * 1000;
-                const currentTime = Date.now();
-
-                if (currentTime >= expiryTime) {
-                    console.warn('⚠️ Token expired, logging out...');
-                    dispatch(logout());
-                    return false;
-                }
-                return true;
-            }
-        }
-        return false;
-    }
-);
-
 // ==================== SLICE ====================
 
 const authSlice = createSlice({
@@ -230,47 +275,38 @@ const authSlice = createSlice({
             const user = action.payload;
             const roles = extractUserRoles(user);
 
-            state.user = {
-                ...user,
-                roles: roles
-            };
+            state.user = { ...user, roles };
             state.isAuthenticated = true;
             state.initialized = true;
-
-            // Cookie'yi güncelle
-            const authCookie = cookieUtils.getAuthCookie();
-            if (authCookie) {
-                cookieUtils.setAuthCookie({
-                    ...authCookie,
-                    user: state.user
-                });
-            }
         },
+
         clearAuth: (state) => {
             state.user = null;
             state.token = null;
             state.isAuthenticated = false;
             state.error = null;
             state.loading = false;
-            // IMPORTANT: initialized TRUE kalmalı ki login sayfasına yönlenebilsin
             state.initialized = true;
-            cookieUtils.clearAuthCookie();
+
+            // Cookie ve localStorage temizle
+            document.cookie = 'authUser=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+            localStorage.removeItem(STORAGE_KEYS.TOKEN);
+            localStorage.removeItem(STORAGE_KEYS.USER);
         },
+
         setTokenFromCookie: (state) => {
-            const authCookie = cookieUtils.getAuthCookie();
-            if (authCookie && authCookie.authToken) {
+            const authCookie = readAuthCookieInline();
+            if (authCookie?.authToken) {
                 const user = authCookie.user || {};
                 const roles = extractUserRoles(user);
 
                 state.token = authCookie.authToken;
-                state.user = {
-                    ...user,
-                    roles: roles
-                };
+                state.user = { ...user, roles };
                 state.isAuthenticated = true;
                 state.initialized = true;
             }
         },
+
         setInitialized: (state, action) => {
             state.initialized = action.payload;
         },
@@ -279,7 +315,10 @@ const authSlice = createSlice({
         builder
             // validateAndLoadUser
             .addCase(validateAndLoadUser.pending, (state) => {
-                state.loading = true;
+                // ✅ FIX: Eğer zaten authenticated ise loading gösterme
+                if (!state.isAuthenticated) {
+                    state.loading = true;
+                }
             })
             .addCase(validateAndLoadUser.fulfilled, (state, action) => {
                 state.loading = false;
@@ -289,17 +328,19 @@ const authSlice = createSlice({
                     state.user = action.payload.user;
                     state.token = action.payload.token;
                     state.isAuthenticated = true;
-                } else {
-                    state.user = null;
-                    state.token = null;
-                    state.isAuthenticated = false;
                 }
+                // ✅ FIX: payload null olsa bile mevcut state'i koru
+                // Sadece açıkça null dönerse logout yap
             })
             .addCase(validateAndLoadUser.rejected, (state, action) => {
                 state.loading = false;
                 state.initialized = true;
                 state.error = action.payload;
-                state.isAuthenticated = false;
+                // ✅ FIX: Hata olsa bile mevcut auth durumunu koru
+                // Sadece token yoksa logout yap
+                if (!state.token) {
+                    state.isAuthenticated = false;
+                }
             })
 
             // login
@@ -312,14 +353,10 @@ const authSlice = createSlice({
                 state.initialized = true;
 
                 if (action.payload) {
-                    // User zaten rolleri içeriyor (thunk'ta eklendi)
                     state.user = action.payload.user;
                     state.token = action.payload.accessToken;
                     state.isAuthenticated = true;
                     state.error = null;
-
-                    console.log('🔄 Redux state updated - user:', state.user);
-                    console.log('🔄 Redux state updated - roles:', state.user?.roles);
                 }
             })
             .addCase(login.rejected, (state, action) => {
@@ -334,20 +371,19 @@ const authSlice = createSlice({
                 state.loading = true;
             })
             .addCase(logout.fulfilled, (state) => {
-                state.loading = false;
                 state.user = null;
                 state.token = null;
                 state.isAuthenticated = false;
-                state.error = null;
-                // IMPORTANT: Logout sonrası initialized TRUE kalmalı
+                state.loading = false;
                 state.initialized = true;
+                state.error = null;
             })
             .addCase(logout.rejected, (state) => {
-                state.loading = false;
+                // Hata olsa bile logout yap
                 state.user = null;
                 state.token = null;
                 state.isAuthenticated = false;
-                state.error = null;
+                state.loading = false;
                 state.initialized = true;
             })
 
@@ -360,43 +396,8 @@ const authSlice = createSlice({
     },
 });
 
-// ==================== ACTIONS ====================
+// ==================== EXPORTS ====================
 
 export const { setUser, clearAuth, setTokenFromCookie, setInitialized } = authSlice.actions;
-
-// ==================== SELECTORS ====================
-
-export const selectUser = (state) => state.auth.user;
-export const selectUserRoles = (state) => state.auth.user?.roles || [];
-export const selectUserProjects = (state) => state.auth.user?.projects || [];
-export const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
-export const selectIsInitialized = (state) => state.auth.initialized;
-
-export const selectIsAdmin = (state) => {
-    const roles = selectUserRoles(state);
-    return roles.includes('Admin');
-};
-
-export const selectIsRaporAdmin = (state) => {
-    const roles = selectUserRoles(state);
-    return roles.includes('RaporAdmin');
-};
-
-export const selectCanViewReports = (state) => {
-    return selectIsAdmin(state) || selectIsRaporAdmin(state);
-};
-
-export const selectHasRole = (role) => (state) => {
-    const roles = selectUserRoles(state);
-    return roles.includes(role);
-};
-
-export const selectUserRolesForProject = (projectName) => (state) => {
-    const projects = selectUserProjects(state);
-    const project = projects.find(
-        (p) => p.projectName?.toLowerCase() === projectName?.toLowerCase()
-    );
-    return project?.roles || [];
-};
 
 export default authSlice.reducer;
