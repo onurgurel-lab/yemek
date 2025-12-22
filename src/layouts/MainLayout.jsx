@@ -1,12 +1,10 @@
 /**
  * MainLayout.jsx - Ana Layout Component
  *
- * Admin/RaporAdmin rollerine göre yönetim menülerini gösterir.
- * VITE_API_USER_ROLES'taki projeden roller alınır.
- *
- * Güncelleme: Yemekhane dropdown kaldırıldı, menüler doğrudan header'da listeleniyor
- * Menü Görüntüle kaldırıldı (Dashboard'da gösteriliyor)
- * Rol etiketleri kaldırıldı (temiz görünüm)
+ * ROL BAZLI MENÜ GÖRÜNÜRLÜğÜ:
+ * - Admin: Dashboard, Menü Yönetimi, Excel Yükle, Raporlar
+ * - RaporAdmin: Dashboard, Raporlar
+ * - Diğer: Dashboard
  *
  * @module layouts/MainLayout
  */
@@ -32,12 +30,8 @@ const { Header, Content } = Layout;
 
 /**
  * MainLayout - Transfer İletişim Projesi Ana Layout
- *
- * @param {Object} props
- * @param {React.ReactNode} props.children - İçerik
  */
 const MainLayout = ({ children }) => {
-    // Mobil menü görünürlüğü için state
     const [mobileMenuVisible, setMobileMenuVisible] = useState(false);
 
     const { t, i18n } = useTranslation();
@@ -46,11 +40,14 @@ const MainLayout = ({ children }) => {
     const { user, logout } = useAuth();
 
     // Rol kontrolü için hook
-    const { canManageMenu } = useUserRoles();
+    const {
+        isAdmin,           // Admin mi? (Menü Yönetimi, Excel Yükle, Raporlar)
+        canViewReports     // Raporlar yetkisi (Admin VEYA RaporAdmin)
+    } = useUserRoles();
 
     /**
      * menuItems - Ana navigasyon menü öğeleri
-     * Dropdown kaldırıldı, tüm menüler düz liste olarak header'da gösteriliyor
+     * Role göre dinamik olarak oluşturulur
      */
     const menuItems = [
         // Dashboard - herkes görebilir
@@ -63,38 +60,39 @@ const MainLayout = ({ children }) => {
                 setMobileMenuVisible(false);
             },
         },
-        // Menü Yönetimi - sadece Admin/RaporAdmin
-        ...(canManageMenu ? [
-            {
-                key: ROUTES.YEMEKHANE_MANAGEMENT || '/yemekhane/yonetim',
-                icon: <EditOutlined />,
-                label: 'Menü Yönetimi',
-                onClick: () => {
-                    navigate(ROUTES.YEMEKHANE_MANAGEMENT || '/yemekhane/yonetim');
-                    setMobileMenuVisible(false);
-                },
+
+        // Menü Yönetimi - SADECE Admin
+        ...(isAdmin ? [{
+            key: ROUTES.YEMEKHANE_MANAGEMENT || '/yemekhane/yonetim',
+            icon: <EditOutlined />,
+            label: 'Menü Yönetimi',
+            onClick: () => {
+                navigate(ROUTES.YEMEKHANE_MANAGEMENT || '/yemekhane/yonetim');
+                setMobileMenuVisible(false);
             },
-            // Excel Yükle - sadece Admin/RaporAdmin
-            {
-                key: ROUTES.YEMEKHANE_EXCEL || '/yemekhane/excel-yukle',
-                icon: <UploadOutlined />,
-                label: 'Excel Yükle',
-                onClick: () => {
-                    navigate(ROUTES.YEMEKHANE_EXCEL || '/yemekhane/excel-yukle');
-                    setMobileMenuVisible(false);
-                },
+        }] : []),
+
+        // Excel Yükle - SADECE Admin
+        ...(isAdmin ? [{
+            key: ROUTES.YEMEKHANE_EXCEL || '/yemekhane/excel-yukle',
+            icon: <UploadOutlined />,
+            label: 'Excel Yükle',
+            onClick: () => {
+                navigate(ROUTES.YEMEKHANE_EXCEL || '/yemekhane/excel-yukle');
+                setMobileMenuVisible(false);
             },
-            // Raporlar - sadece Admin/RaporAdmin
-            {
-                key: ROUTES.YEMEKHANE_REPORTS || '/yemekhane/raporlar',
-                icon: <BarChartOutlined />,
-                label: 'Raporlar',
-                onClick: () => {
-                    navigate(ROUTES.YEMEKHANE_REPORTS || '/yemekhane/raporlar');
-                    setMobileMenuVisible(false);
-                },
+        }] : []),
+
+        // Raporlar - Admin VEYA RaporAdmin
+        ...(canViewReports ? [{
+            key: ROUTES.YEMEKHANE_REPORTS || '/yemekhane/raporlar',
+            icon: <BarChartOutlined />,
+            label: 'Raporlar',
+            onClick: () => {
+                navigate(ROUTES.YEMEKHANE_REPORTS || '/yemekhane/raporlar');
+                setMobileMenuVisible(false);
             },
-        ] : []),
+        }] : []),
     ];
 
     /**
@@ -114,7 +112,7 @@ const MainLayout = ({ children }) => {
     ];
 
     /**
-     * Kullanıcı menüsü (profil dropdown) - Sadeleştirildi
+     * Kullanıcı menüsü (profil dropdown)
      */
     const userMenuItems = [
         {
@@ -167,7 +165,7 @@ const MainLayout = ({ children }) => {
                     </div>
                 </div>
 
-                {/* Masaüstü Menü - Düz liste (dropdown yok) */}
+                {/* Masaüstü Menü - Düz liste */}
                 <div className="hidden lg:flex flex-1 items-center justify-center px-8">
                     <Menu
                         mode="horizontal"

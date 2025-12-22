@@ -39,7 +39,7 @@ export const authService = {
             if (response.data.isSuccess) {
                 const result = response.data.result
 
-                // User data
+                // User data - PROJECTS DAHİL EDİLDİ!
                 const userData = {
                     id: result.id,
                     fullName: result.fullName,
@@ -48,6 +48,8 @@ export const authService = {
                     phoneNumber: result.phoneNumber,
                     profilePhoto: result.profilePhoto || null,
                     employeeId: result.employeeId,
+                    // ✅ PROJECTS EKLENDİ - Bu olmadan roller çalışmaz!
+                    projects: result.projects || [],
                 }
 
                 // Cookie'ye kaydet
@@ -62,6 +64,7 @@ export const authService = {
                 cookieUtils.setAuthCookie(authCookieData)
 
                 console.log('✅ Login successful')
+                console.log('📋 User projects:', userData.projects)
 
                 // Redux store için response
                 return {
@@ -82,7 +85,6 @@ export const authService = {
 
     /**
      * validateToken - Token'ı validate et
-     * ✅ Sadece user bilgilerini döndür
      */
     async validateToken(token) {
         try {

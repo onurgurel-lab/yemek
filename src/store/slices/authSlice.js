@@ -21,6 +21,7 @@ const TARGET_PROJECT = import.meta.env.VITE_API_USER_ROLES || 'Yemekhane';
  */
 const extractUserRoles = (user) => {
     if (!user?.projects || !Array.isArray(user.projects)) {
+        console.log('[extractUserRoles] No projects found, user:', user);
         return [];
     }
 
@@ -28,7 +29,14 @@ const extractUserRoles = (user) => {
         (p) => p.projectName?.toLowerCase() === TARGET_PROJECT.toLowerCase()
     );
 
-    return project?.roles || [];
+    if (!project) {
+        console.log(`[extractUserRoles] Project "${TARGET_PROJECT}" not found in:`, user.projects);
+        return [];
+    }
+
+    const roles = project.roles || [];
+    console.log(`[extractUserRoles] ${TARGET_PROJECT} roles:`, roles);
+    return roles;
 };
 
 /**
@@ -40,7 +48,7 @@ const getInitialState = () => {
 
     // Cookie'deki user'a rolleri ekle
     let user = authCookie?.user || null;
-    if (user && !user.roles) {
+    if (user) {
         user = {
             ...user,
             roles: extractUserRoles(user)
@@ -81,17 +89,24 @@ export const validateAndLoadUser = createAsyncThunk(
             const validateResult = await authService.validateToken(authCookie.authToken);
 
             if (validateResult) {
+                // Rolleri ekle
+                const roles = extractUserRoles(validateResult);
+                const userWithRoles = {
+                    ...validateResult,
+                    roles: roles
+                };
+
                 console.log('✅ Token validated successfully');
-                console.log('📋 User roles:', validateResult.roles);
+                console.log('📋 User roles:', roles);
 
                 // Cookie'deki user bilgisini güncelle
                 cookieUtils.setAuthCookie({
                     ...authCookie,
-                    user: validateResult
+                    user: userWithRoles
                 });
 
                 return {
-                    user: validateResult,
+                    user: userWithRoles,
                     token: authCookie.authToken,
                 };
             }
@@ -124,7 +139,19 @@ export const login = createAsyncThunk(
     async (credentials, { rejectWithValue }) => {
         try {
             const response = await authService.login(credentials);
-            console.log('✅ Login successful');
+            console.log('✅ Login thunk response:', response);
+            console.log('📋 User from login:', response?.user);
+
+            // User'a rolleri ekle
+            if (response && response.user) {
+                const roles = extractUserRoles(response.user);
+                response.user = {
+                    ...response.user,
+                    roles: roles
+                };
+                console.log('📋 Login user with roles:', response.user);
+            }
+
             return response;
         } catch (error) {
             console.error('❌ Login failed:', error.message);
@@ -145,7 +172,8 @@ export const logout = createAsyncThunk(
             return null;
         } catch (error) {
             console.error('❌ Logout failed:', error.message);
-            return rejectWithValue(error.message || 'Logout failed');
+            // Hata olsa bile logout yap
+            return null;
         }
     }
 );
@@ -206,6 +234,8 @@ const authSlice = createSlice({
                 ...user,
                 roles: roles
             };
+            state.isAuthenticated = true;
+            state.initialized = true;
 
             // Cookie'yi güncelle
             const authCookie = cookieUtils.getAuthCookie();
@@ -221,7 +251,9 @@ const authSlice = createSlice({
             state.token = null;
             state.isAuthenticated = false;
             state.error = null;
-            state.initialized = false;
+            state.loading = false;
+            // IMPORTANT: initialized TRUE kalmalı ki login sayfasına yönlenebilsin
+            state.initialized = true;
             cookieUtils.clearAuthCookie();
         },
         setTokenFromCookie: (state) => {
@@ -236,7 +268,11 @@ const authSlice = createSlice({
                     roles: roles
                 };
                 state.isAuthenticated = true;
+                state.initialized = true;
             }
+        },
+        setInitialized: (state, action) => {
+            state.initialized = action.payload;
         },
     },
     extraReducers: (builder) => {
@@ -273,16 +309,22 @@ const authSlice = createSlice({
             })
             .addCase(login.fulfilled, (state, action) => {
                 state.loading = false;
+                state.initialized = true;
 
                 if (action.payload) {
+                    // User zaten rolleri içeriyor (thunk'ta eklendi)
                     state.user = action.payload.user;
                     state.token = action.payload.accessToken;
                     state.isAuthenticated = true;
                     state.error = null;
+
+                    console.log('🔄 Redux state updated - user:', state.user);
+                    console.log('🔄 Redux state updated - roles:', state.user?.roles);
                 }
             })
             .addCase(login.rejected, (state, action) => {
                 state.loading = false;
+                state.initialized = true;
                 state.error = action.payload;
                 state.isAuthenticated = false;
             })
@@ -297,15 +339,16 @@ const authSlice = createSlice({
                 state.token = null;
                 state.isAuthenticated = false;
                 state.error = null;
-                state.initialized = false;
+                // IMPORTANT: Logout sonrası initialized TRUE kalmalı
+                state.initialized = true;
             })
             .addCase(logout.rejected, (state) => {
-                // Hata olsa bile çıkış yap
                 state.loading = false;
                 state.user = null;
                 state.token = null;
                 state.isAuthenticated = false;
                 state.error = null;
+                state.initialized = true;
             })
 
             // refreshToken
@@ -319,66 +362,35 @@ const authSlice = createSlice({
 
 // ==================== ACTIONS ====================
 
-export const { setUser, clearAuth, setTokenFromCookie } = authSlice.actions;
+export const { setUser, clearAuth, setTokenFromCookie, setInitialized } = authSlice.actions;
 
 // ==================== SELECTORS ====================
 
-/**
- * selectUser - User objesini seçer
- */
 export const selectUser = (state) => state.auth.user;
-
-/**
- * selectUserRoles - User rollerini seçer
- */
 export const selectUserRoles = (state) => state.auth.user?.roles || [];
-
-/**
- * selectUserProjects - User projelerini seçer
- */
 export const selectUserProjects = (state) => state.auth.user?.projects || [];
-
-/**
- * selectIsAuthenticated - Auth durumunu seçer
- */
 export const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
+export const selectIsInitialized = (state) => state.auth.initialized;
 
-/**
- * selectIsAdmin - Admin kontrolü
- */
 export const selectIsAdmin = (state) => {
     const roles = selectUserRoles(state);
     return roles.includes('Admin');
 };
 
-/**
- * selectIsYemekhaneAdmin - RaporAdmin/YemekhaneAdmin kontrolü
- */
-export const selectIsYemekhaneAdmin = (state) => {
+export const selectIsRaporAdmin = (state) => {
     const roles = selectUserRoles(state);
-    return roles.includes('RaporAdmin') || roles.includes('YemekhaneAdmin');
+    return roles.includes('RaporAdmin');
 };
 
-/**
- * selectCanManageMenu - Menü yönetim yetkisi
- */
-export const selectCanManageMenu = (state) => {
-    return selectIsAdmin(state) || selectIsYemekhaneAdmin(state);
+export const selectCanViewReports = (state) => {
+    return selectIsAdmin(state) || selectIsRaporAdmin(state);
 };
 
-/**
- * selectHasRole - Belirli role sahip mi
- * @param {string} role - Kontrol edilecek rol
- */
 export const selectHasRole = (role) => (state) => {
     const roles = selectUserRoles(state);
     return roles.includes(role);
 };
 
-/**
- * selectUserRolesForProject - Belirli projedeki roller
- * @param {string} projectName - Proje adı
- */
 export const selectUserRolesForProject = (projectName) => (state) => {
     const projects = selectUserProjects(state);
     const project = projects.find(

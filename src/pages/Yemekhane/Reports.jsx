@@ -1,10 +1,10 @@
 /**
  * Reports.jsx - Yemekhane Raporlama Sayfası
  *
+ * Eski projedeki Reports.jsx'in Ant Design uyarlaması
  * Genel bakış, yemek analizi, günlük trendler ve yorum analizi sekmeleri
- * Ant Design bileşenleri kullanılarak oluşturulmuştur.
  *
- * @module pages/Yemekhane/Reports
+ * @module pages/Yemekhane/components/Reports
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -54,13 +54,6 @@ import {
 } from '@ant-design/icons';
 import { useUserRoles } from '@/hooks/useUserRoles';
 import * as reportService from '@/services/reportService';
-import {
-    getCategoryColor,
-    getCategoryIcon,
-    formatDate as formatDateUtil,
-    MEAL_CATEGORIES,
-    RATING_DESCRIPTIONS,
-} from '@/constants/mealMenuApi';
 import dayjs from 'dayjs';
 import 'dayjs/locale/tr';
 
@@ -70,6 +63,7 @@ const { Title, Text, Paragraph } = Typography;
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 const { Search } = Input;
+const { TabPane } = Tabs;
 
 /**
  * Reports - Yemekhane Raporlama Ana Bileşeni
@@ -131,7 +125,7 @@ const Reports = () => {
                             <Paragraph>Bu sayfaya erişim yetkiniz bulunmamaktadır.</Paragraph>
                             <Paragraph>
                                 Sadece <Tag color="red">Admin</Tag> veya{' '}
-                                <Tag color="orange">YemekhaneAdmin</Tag> rolüne sahip kullanıcılar
+                                <Tag color="orange">RaporAdmin</Tag> rolüne sahip kullanıcılar
                                 raporları görüntüleyebilir.
                             </Paragraph>
                         </div>
@@ -171,6 +165,7 @@ const Reports = () => {
                     mealsRes
                         .map(m => m.category)
                         .filter(Boolean)
+                        .map(c => c.charAt(0).toUpperCase() + c.slice(1).toLowerCase())
                 )].sort();
                 setCategories(uniqueCategories);
             }
@@ -451,9 +446,7 @@ const Reports = () => {
                                     title={
                                         <Space>
                                             <Text strong>{comment.mealMenu?.foodName || 'Bilinmeyen Yemek'}</Text>
-                                            <Tag color={getCategoryColor(comment.mealMenu?.category)}>
-                                                {getCategoryIcon(comment.mealMenu?.category)} {comment.mealMenu?.category}
-                                            </Tag>
+                                            <Tag color="blue">{comment.mealMenu?.category}</Tag>
                                             <Text type="secondary" style={{ fontSize: 12 }}>
                                                 <ClockCircleOutlined /> {formatDate(comment.createdDate)}
                                             </Text>
@@ -489,7 +482,7 @@ const Reports = () => {
                 key: 'foodName',
                 render: (text, record) => (
                     <Button type="link" onClick={() => openMealModal(record)}>
-                        {getCategoryIcon(record.category)} {text}
+                        {text}
                     </Button>
                 ),
             },
@@ -497,11 +490,7 @@ const Reports = () => {
                 title: 'Kategori',
                 dataIndex: 'category',
                 key: 'category',
-                render: (cat) => (
-                    <Tag color={getCategoryColor(cat)}>
-                        {getCategoryIcon(cat)} {cat || '-'}
-                    </Tag>
-                ),
+                render: (cat) => <Tag color="blue">{cat || '-'}</Tag>,
             },
             {
                 title: 'Ortalama Puan',
@@ -522,18 +511,14 @@ const Reports = () => {
                 title: 'Puan Sayısı',
                 key: 'ratingCount',
                 render: (_, record) => (
-                    <Tag icon={<StarOutlined />} color="gold">
-                        {record.menuPoints?.length || 0}
-                    </Tag>
+                    <Tag icon={<StarOutlined />}>{record.menuPoints?.length || 0}</Tag>
                 ),
             },
             {
                 title: 'Yorum Sayısı',
                 key: 'commentCount',
                 render: (_, record) => (
-                    <Tag icon={<MessageOutlined />} color="blue">
-                        {record.menuComments?.length || 0}
-                    </Tag>
+                    <Tag icon={<MessageOutlined />}>{record.menuComments?.length || 0}</Tag>
                 ),
             },
             {
@@ -599,10 +584,8 @@ const Reports = () => {
                                 allowClear
                                 style={{ width: '100%' }}
                             >
-                                {MEAL_CATEGORIES.map(cat => (
-                                    <Option key={cat.value} value={cat.value}>
-                                        {cat.icon} {cat.label}
-                                    </Option>
+                                {categories.map(cat => (
+                                    <Option key={cat} value={cat}>{cat}</Option>
                                 ))}
                             </Select>
                         </Col>
@@ -918,9 +901,7 @@ const Reports = () => {
                                         title={
                                             <Space wrap>
                                                 <Text strong>{comment.mealMenu?.foodName || 'Bilinmeyen Yemek'}</Text>
-                                                <Tag color={getCategoryColor(comment.mealMenu?.category)}>
-                                                    {getCategoryIcon(comment.mealMenu?.category)} {comment.mealMenu?.category}
-                                                </Tag>
+                                                <Tag color="blue">{comment.mealMenu?.category}</Tag>
                                                 <Text type="secondary" style={{ fontSize: 12 }}>
                                                     <ClockCircleOutlined /> {formatDate(comment.createdDate)}
                                                 </Text>
@@ -961,10 +942,8 @@ const Reports = () => {
             <Modal
                 title={
                     <Space>
-                        <span>{getCategoryIcon(selectedMeal.category)} {selectedMeal.foodName}</span>
-                        <Tag color={getCategoryColor(selectedMeal.category)}>
-                            {selectedMeal.category}
-                        </Tag>
+                        <span>{selectedMeal.foodName}</span>
+                        <Tag color="blue">{selectedMeal.category}</Tag>
                     </Space>
                 }
                 open={mealModalVisible}
@@ -987,11 +966,6 @@ const Reports = () => {
                                 prefix={<StarOutlined style={{ color: '#faad14' }} />}
                             />
                             <Rate disabled value={Math.round(avgRating)} style={{ marginTop: 8 }} />
-                            <div style={{ marginTop: 8 }}>
-                                <Text type="secondary">
-                                    {RATING_DESCRIPTIONS[Math.round(avgRating)] || ''}
-                                </Text>
-                            </div>
                         </Card>
                     </Col>
                     <Col span={12}>
@@ -1115,7 +1089,7 @@ const Reports = () => {
                             <BarChartOutlined style={{ fontSize: 24, color: '#1890ff' }} />
                             <Title level={4} style={{ marginBottom: 0 }}>Yemekhane Raporları</Title>
                             {isAdmin && <Tag color="red">Admin</Tag>}
-                            {isYemekhaneAdmin && !isAdmin && <Tag color="orange">YemekhaneAdmin</Tag>}
+                            {isYemekhaneAdmin && !isAdmin && <Tag color="orange">RaporAdmin</Tag>}
                         </Space>
                     </Col>
                     <Col>

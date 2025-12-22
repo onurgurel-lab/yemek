@@ -1,48 +1,51 @@
 /**
- * App.jsx - Ana Uygulama Component'i
+ * App.jsx - Ana Uygulama Componenti
  *
- * Route yapılandırmasını kullanarak sayfaları render eder.
- * Güncelleme: /yemekhane (Menü Görüntüle) route'u kaldırıldı - Dashboard'da gösteriliyor
+ * ROL BAZLI ROUTE KORUMASI:
+ * - /yemekhane/yonetim → AdminRoute (SADECE Admin)
+ * - /yemekhane/excel-yukle → AdminRoute (SADECE Admin)
+ * - /yemekhane/raporlar → ReportsRoute (Admin VEYA RaporAdmin)
+ * - /dashboard → PrivateRoute (tüm giriş yapmış kullanıcılar)
  *
  * @module App
  */
 
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Provider } from 'react-redux';
-import { ConfigProvider, Spin } from 'antd';
+import { Provider, useDispatch } from 'react-redux';
+import { ConfigProvider } from 'antd';
 import trTR from 'antd/locale/tr_TR';
 
+// Store
 import { store } from '@/store';
-import { useAuthInit } from '@/hooks/useAuthInit';
-import { ROUTES } from '@/constants/routes';
 
-// Layout
+// Components
 import MainLayout from '@/layouts/MainLayout';
-
-// Pages
-import Login from '@/pages/Login';
-import Dashboard from '@/pages/Dashboard';
-import Example from '@/pages/Example';
-
-// Protected Routes
 import {
     PrivateRoute,
     AdminRoute,
+    ReportsRoute,
     PublicRoute,
     PageLoading,
-    UnauthorizedPage
 } from '@/components/ProtectedRoute';
 
-// Yemekhane Pages - Lazy Loading (MenuView kaldırıldı - Dashboard'da gösteriliyor)
+// Constants
+import { ROUTES } from '@/constants/routes';
+
+// Auth Actions
+import { validateAndLoadUser } from '@/store/slices/authSlice';
+
+// ==================== LAZY LOAD PAGES ====================
+
+const Login = React.lazy(() => import('@/pages/Login'));
+const Dashboard = React.lazy(() => import('@/pages/Dashboard'));
 const MenuManagement = React.lazy(() => import('@/pages/Yemekhane/MenuManagement'));
 const ExcelUpload = React.lazy(() => import('@/pages/Yemekhane/ExcelUpload'));
 const Reports = React.lazy(() => import('@/pages/Yemekhane/Reports'));
 
-/**
- * AppLoading - Uygulama başlatılırken gösterilecek loading
- */
-const AppLoading = () => (
+// ==================== UNAUTHORIZED PAGE ====================
+
+const UnauthorizedPage = () => (
     <div style={{
         display: 'flex',
         justifyContent: 'center',
@@ -51,65 +54,63 @@ const AppLoading = () => (
         flexDirection: 'column',
         gap: '16px'
     }}>
-        <Spin size="large" />
-        <span style={{ color: '#666' }}>Uygulama başlatılıyor...</span>
+        <h1 style={{ color: '#ff4d4f' }}>403 - Yetkisiz Erişim</h1>
+        <p>Bu sayfaya erişim yetkiniz bulunmamaktadır.</p>
+        <a href={ROUTES.DASHBOARD}>Dashboard'a Dön</a>
     </div>
 );
 
+// ==================== APP CONTENT ====================
+
 /**
- * AppContent - Auth initialization ile routes
+ * AppContent - Route yapısını içeren ana component
  */
 const AppContent = () => {
-    // Auth durumunu başlat (cookie kontrolü)
-    const { initialized } = useAuthInit();
+    const dispatch = useDispatch();
 
-    // Auth başlatılana kadar loading göster
-    if (!initialized) {
-        return <AppLoading />;
-    }
+    // Uygulama başladığında auth durumunu kontrol et
+    useEffect(() => {
+        dispatch(validateAndLoadUser());
+    }, [dispatch]);
 
     return (
         <Routes>
             {/* ==================== PUBLIC ROUTES ==================== */}
+
+            {/* Login */}
             <Route
                 path={ROUTES.LOGIN}
                 element={
                     <PublicRoute>
-                        <Login />
+                        <Suspense fallback={<PageLoading />}>
+                            <Login />
+                        </Suspense>
                     </PublicRoute>
                 }
             />
 
             {/* ==================== PRIVATE ROUTES ==================== */}
 
-            {/* Dashboard - Menü görüntüleme artık burada */}
+            {/* Dashboard - Tüm giriş yapmış kullanıcılar */}
             <Route
                 path={ROUTES.DASHBOARD}
                 element={
                     <PrivateRoute>
                         <MainLayout>
-                            <Dashboard />
+                            <Suspense fallback={<PageLoading />}>
+                                <Dashboard />
+                            </Suspense>
                         </MainLayout>
                     </PrivateRoute>
                 }
             />
 
-            {/* Example */}
-            <Route
-                path={ROUTES.EXAMPLE}
-                element={
-                    <PrivateRoute>
-                        <MainLayout>
-                            <Example />
-                        </MainLayout>
-                    </PrivateRoute>
-                }
-            />
+            {/* ==================== ADMIN ONLY ROUTES ==================== */}
 
-            {/* ==================== YEMEKHANE ADMIN ROUTES ==================== */}
-            {/* Not: /yemekhane (Menü Görüntüle) kaldırıldı - Dashboard'da gösteriliyor */}
-
-            {/* Menü Yönetimi - SADECE Admin/RaporAdmin */}
+            {/*
+                Menü Yönetimi - SADECE Admin
+                RaporAdmin bu sayfaya erişemez!
+            */}
             <Route
                 path={ROUTES.YEMEKHANE_MANAGEMENT}
                 element={
@@ -123,7 +124,10 @@ const AppContent = () => {
                 }
             />
 
-            {/* Excel Yükle - SADECE Admin/RaporAdmin */}
+            {/*
+                Excel Yükle - SADECE Admin
+                RaporAdmin bu sayfaya erişemez!
+            */}
             <Route
                 path={ROUTES.YEMEKHANE_EXCEL}
                 element={
@@ -137,17 +141,22 @@ const AppContent = () => {
                 }
             />
 
-            {/* Raporlar - SADECE Admin/RaporAdmin */}
+            {/* ==================== REPORTS ROUTE ==================== */}
+
+            {/*
+                Raporlar - Admin VEYA RaporAdmin
+                Her iki rol de bu sayfaya erişebilir
+            */}
             <Route
                 path={ROUTES.YEMEKHANE_REPORTS}
                 element={
-                    <AdminRoute>
+                    <ReportsRoute>
                         <MainLayout>
                             <Suspense fallback={<PageLoading />}>
                                 <Reports />
                             </Suspense>
                         </MainLayout>
-                    </AdminRoute>
+                    </ReportsRoute>
                 }
             />
 
@@ -179,6 +188,8 @@ const AppContent = () => {
         </Routes>
     );
 };
+
+// ==================== APP ====================
 
 /**
  * App - Ana uygulama wrapper'ı
