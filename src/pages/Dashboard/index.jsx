@@ -19,7 +19,6 @@ import {
     selectSelectedDate,
     selectCurrentMonth,
     selectActiveTab,
-    selectSearchTerm,
     selectSearchResults,
     selectShowSearchResults,
     selectShowWeeklyPopup,
@@ -54,6 +53,10 @@ const { Search } = Input;
 
 /**
  * Dashboard - Yemek Menüsü Entegre Dashboard
+ *
+ * ✅ FIX: Search input sorunu çözüldü
+ * ✅ FIX: API response formatı düzeltildi
+ *         Arama sonucu: { date, menus: [...] } formatında
  */
 const Dashboard = () => {
     const dispatch = useDispatch();
@@ -64,7 +67,6 @@ const Dashboard = () => {
     const selectedDate = useSelector(selectSelectedDate);
     const currentMonth = useSelector(selectCurrentMonth);
     const activeTab = useSelector(selectActiveTab);
-    const searchTerm = useSelector(selectSearchTerm);
     const searchResults = useSelector(selectSearchResults);
     const showSearchResults = useSelector(selectShowSearchResults);
     const showWeeklyPopup = useSelector(selectShowWeeklyPopup);
@@ -72,6 +74,9 @@ const Dashboard = () => {
     const showDayEvaluationPopup = useSelector(selectShowDayEvaluationPopup);
     const loading = useSelector(selectLoading);
     const searchLoading = useSelector(selectSearchLoading);
+
+    // ✅ FIX: Local state for search input
+    const [searchInputValue, setSearchInputValue] = useState('');
 
     // Local state
     const [selectedMenuItem, setSelectedMenuItem] = useState(null);
@@ -83,10 +88,53 @@ const Dashboard = () => {
     // Refs
     const isInitializedRef = useRef(false);
     const previousDateRef = useRef(null);
+    const searchTimeoutRef = useRef(null);
 
     // User info
     const userId = user?.id || user?.uId;
     const userName = user?.userName || user?.fullName || user?.name || 'Kullanıcı';
+
+    // ✅ FIX: Normalize search results
+    // API formatı: [{ date: "2025-12-23", menus: [...] }, ...]
+    // veya: { data: [{ date, menus }, ...] }
+    const normalizedSearchResults = useMemo(() => {
+        if (!searchResults) return [];
+
+        let results = searchResults;
+
+        // Eğer { data: [...] } formatında ise
+        if (searchResults.data && Array.isArray(searchResults.data)) {
+            results = searchResults.data;
+        }
+
+        // Eğer direkt array ise
+        if (!Array.isArray(results)) {
+            return [];
+        }
+
+        return results;
+    }, [searchResults]);
+
+    // ✅ FIX: Flatten all menus for counting
+    const flattenedMenus = useMemo(() => {
+        const allMenus = [];
+        normalizedSearchResults.forEach(dayItem => {
+            if (dayItem.menus && Array.isArray(dayItem.menus)) {
+                dayItem.menus.forEach(menu => {
+                    allMenus.push({
+                        ...menu,
+                        parentDate: dayItem.date // Hangi güne ait olduğunu tut
+                    });
+                });
+            }
+        });
+        return allMenus;
+    }, [normalizedSearchResults]);
+
+    // ✅ FIX: Show search results
+    const shouldShowSearchResults = useMemo(() => {
+        return searchInputValue.trim().length >= 2 && flattenedMenus.length > 0;
+    }, [searchInputValue, flattenedMenus]);
 
     /**
      * Tüm menü itemları için puan bilgilerini yükle
@@ -201,6 +249,15 @@ const Dashboard = () => {
         }
     }, [menuData, loadMenuRatings]);
 
+    // Cleanup timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
+        };
+    }, []);
+
     // Calendar days
     const calendarDays = useMemo(() => {
         const days = [];
@@ -279,23 +336,52 @@ const Dashboard = () => {
         dispatch(setSelectedDate(dateString));
     }, [dispatch]);
 
-    // Search
-    const handleSearch = useCallback((value) => {
-        dispatch(setSearchTerm(value));
-        if (value && value.trim().length >= 2) {
-            dispatch(searchFood(value.trim()));
-        } else {
-            dispatch(clearSearchResults());
+    // ✅ FIX: Search handler with debounce
+    const handleSearchInputChange = useCallback((e) => {
+        const value = e.target.value;
+        setSearchInputValue(value);
+
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
+        searchTimeoutRef.current = setTimeout(() => {
+            dispatch(setSearchTerm(value));
+
+            if (value && value.trim().length >= 2) {
+                dispatch(searchFood(value.trim()));
+            } else {
+                dispatch(clearSearchResults());
+            }
+        }, 500);
+    }, [dispatch]);
+
+    // Clear search
+    const handleClearSearch = useCallback(() => {
+        setSearchInputValue('');
+        dispatch(setSearchTerm(''));
+        dispatch(clearSearchResults());
+
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
         }
     }, [dispatch]);
 
+    // ✅ FIX: Go to date from search
     const goToDateFromSearch = useCallback((dateString) => {
+        const formattedDate = dayjs(dateString).format('YYYY-MM-DD');
         const month = dayjs(dateString).format('YYYY-MM');
         dispatch(setCurrentMonth(month));
-        dispatch(setSelectedDate(dateString));
-        dispatch(clearSearchResults());
-        dispatch(setSearchTerm(''));
-    }, [dispatch]);
+        dispatch(setSelectedDate(formattedDate));
+        handleClearSearch();
+    }, [dispatch, handleClearSearch]);
+
+    // ✅ FIX: Get meal time label
+    const getMealTimeLabel = useCallback((mealTime) => {
+        if (mealTime === 1 || mealTime === MEAL_TIMES.LUNCH) return 'Öğle';
+        if (mealTime === 2 || mealTime === MEAL_TIMES.DINNER) return 'Akşam';
+        return '';
+    }, []);
 
     // Rating modal
     const openRatingModal = useCallback((item) => {
@@ -469,44 +555,128 @@ const Dashboard = () => {
                         {/* Search */}
                         <Search
                             placeholder="Yemek ara..."
-                            prefix={<SearchOutlined />}
                             allowClear
-                            value={searchTerm}
-                            onChange={(e) => handleSearch(e.target.value)}
+                            value={searchInputValue}
+                            onChange={handleSearchInputChange}
+                            onClear={handleClearSearch}
                             loading={searchLoading}
                             style={{ marginBottom: 16 }}
                         />
 
-                        {/* Search Results */}
-                        {showSearchResults && searchResults && searchResults.length > 0 && (
+                        {/* ✅ FIX: Search Results - { date, menus: [...] } formatına uygun */}
+                        {shouldShowSearchResults && (
                             <div style={{
                                 marginBottom: 16,
                                 padding: 12,
                                 background: '#fafafa',
                                 borderRadius: 8,
-                                maxHeight: 200,
+                                maxHeight: 400,
                                 overflow: 'auto'
                             }}>
-                                <Text strong style={{ marginBottom: 8, display: 'block' }}>
-                                    Arama Sonuçları:
-                                </Text>
-                                {searchResults.map((item, idx) => (
-                                    <div
-                                        key={item.id || idx}
-                                        style={{
-                                            padding: '4px 0',
-                                            cursor: 'pointer',
-                                            borderBottom: '1px dashed #f0f0f0'
-                                        }}
-                                        onClick={() => goToDateFromSearch(item.menuDate || item.date)}
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    marginBottom: 12,
+                                    paddingBottom: 8,
+                                    borderBottom: '1px solid #e8e8e8'
+                                }}>
+                                    <Text strong>
+                                        🔍 Arama Sonuçları ({flattenedMenus.length} yemek, {normalizedSearchResults.length} gün)
+                                    </Text>
+                                    <Button
+                                        type="link"
+                                        size="small"
+                                        onClick={handleClearSearch}
+                                        style={{ color: '#ff4d4f' }}
                                     >
-                                        <Space>
-                                            <Tag color={getCategoryColor(item.category)}>{item.category}</Tag>
-                                            <span>{item.foodName}</span>
-                                            <Text type="secondary">
-                                                {dayjs(item.menuDate || item.date).format('DD.MM.YYYY')}
+                                        ✕ Temizle
+                                    </Button>
+                                </div>
+
+                                {/* Günlere göre gruplu gösterim */}
+                                {normalizedSearchResults.map((dayItem, dayIdx) => (
+                                    <div
+                                        key={dayItem.date || dayIdx}
+                                        style={{
+                                            marginBottom: 12,
+                                            padding: 8,
+                                            background: '#fff',
+                                            borderRadius: 6,
+                                            border: '1px solid #e8e8e8'
+                                        }}
+                                    >
+                                        {/* Tarih Başlığı */}
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 8,
+                                                marginBottom: 8,
+                                                paddingBottom: 6,
+                                                borderBottom: '1px dashed #e8e8e8',
+                                                cursor: 'pointer'
+                                            }}
+                                            onClick={() => goToDateFromSearch(dayItem.date)}
+                                        >
+                                            <CalendarOutlined style={{ color: '#1890ff' }} />
+                                            <Text strong style={{ color: '#1890ff' }}>
+                                                {dayjs(dayItem.date).format('DD MMMM YYYY dddd')}
                                             </Text>
-                                        </Space>
+                                            <Badge
+                                                count={dayItem.menus?.length || 0}
+                                                style={{ backgroundColor: '#52c41a' }}
+                                            />
+                                        </div>
+
+                                        {/* O günün menüleri */}
+                                        {dayItem.menus && dayItem.menus.map((menu, menuIdx) => (
+                                            <div
+                                                key={menu.id || menuIdx}
+                                                style={{
+                                                    padding: '6px 8px',
+                                                    marginBottom: menuIdx < dayItem.menus.length - 1 ? 4 : 0,
+                                                    cursor: 'pointer',
+                                                    borderRadius: 4,
+                                                    transition: 'background 0.2s',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 8,
+                                                    flexWrap: 'wrap'
+                                                }}
+                                                onClick={() => goToDateFromSearch(dayItem.date)}
+                                                onMouseEnter={(e) => e.currentTarget.style.background = '#e6f7ff'}
+                                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                                {/* Kategori */}
+                                                <Tag
+                                                    color={getCategoryColor(menu.category)}
+                                                    style={{ margin: 0 }}
+                                                >
+                                                    {getCategoryIcon(menu.category)} {menu.category}
+                                                </Tag>
+
+                                                {/* Öğün */}
+                                                <Tag
+                                                    color={menu.mealTime === 1 ? 'orange' : 'purple'}
+                                                    style={{ margin: 0 }}
+                                                >
+                                                    {menu.mealTime === 1 ? '🍽️ Öğle' : '🌙 Akşam'}
+                                                </Tag>
+
+                                                {/* Yemek Adı */}
+                                                <Text style={{ flex: 1, minWidth: 120 }}>
+                                                    {menu.foodName}
+                                                </Text>
+
+                                                {/* Kalori */}
+                                                {menu.calories > 0 && (
+                                                    <Tag color="volcano" style={{ margin: 0 }}>
+                                                        🔥 {menu.calories} kcal
+                                                    </Tag>
+                                                )}
+                                            </div>
+                                        ))}
                                     </div>
                                 ))}
                             </div>
