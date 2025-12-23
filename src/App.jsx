@@ -1,6 +1,10 @@
 /**
  * App.jsx - Ana Uygulama Componenti
  *
+ * ✅ FIX: 401 Unauthorized → Login Redirect
+ * - setNavigate ile axiosInstance'a navigate fonksiyonu bağlanıyor
+ * - Herhangi bir API 401 döndüğünde otomatik login'e yönlendirilir
+ *
  * ROL BAZLI ROUTE KORUMASI:
  * - /yemekhane/yonetim → AdminRoute (SADECE Admin)
  * - /yemekhane/excel-yukle → AdminRoute (SADECE Admin)
@@ -11,13 +15,16 @@
  */
 
 import React, { Suspense, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Provider, useDispatch } from 'react-redux';
 import { ConfigProvider } from 'antd';
 import trTR from 'antd/locale/tr_TR';
 
 // Store
 import { store } from '@/store';
+
+// Utils - setNavigate import
+import { setNavigate } from '@/utils/axiosInstance';
 
 // Components
 import MainLayout from '@/layouts/MainLayout';
@@ -64,9 +71,19 @@ const UnauthorizedPage = () => (
 
 /**
  * AppContent - Route yapısını içeren ana component
+ *
+ * ✅ useNavigate burada kullanılıyor (BrowserRouter içinde)
+ * ✅ setNavigate ile axiosInstance'a navigate fonksiyonu veriliyor
  */
 const AppContent = () => {
     const dispatch = useDispatch();
+    const navigate = useNavigate();
+
+    // ✅ Axios interceptor'a navigate fonksiyonunu ver
+    // Bu sayede 401 hatalarında React Router ile yönlendirme yapılır
+    useEffect(() => {
+        setNavigate(navigate);
+    }, [navigate]);
 
     // Uygulama başladığında auth durumunu kontrol et
     useEffect(() => {

@@ -1,10 +1,10 @@
 /**
  * axiosInstance.js - Merkezi Axios Yapılandırması
  *
- * ✅ FIX v3: Token handling TAMAMEN düzeltildi
- * - Inline cookie okuma fonksiyonu eklendi (bağımlılık sorunu yok)
- * - getAuthToken export ediliyor
- * - Debug logları eklendi
+ * ✅ FIX v4: 401 Unauthorized → Login Redirect
+ * - setNavigate ile React Router entegrasyonu
+ * - handleUnauthorized fonksiyonu ile temiz logout
+ * - Tüm auth bilgileri temizlenir ve login'e yönlendirilir
  *
  * @module utils/axiosInstance
  */
@@ -22,6 +22,25 @@ const axiosInstance = axios.create({
     baseURL: API_CONFIG.BASE_URL,
     timeout: API_CONFIG.TIMEOUT,
 })
+
+// ==================== NAVIGATE REF ====================
+
+/**
+ * Navigate referansı - App.jsx'ten set edilir
+ * Bu sayede React Router navigate fonksiyonu interceptor içinde kullanılabilir
+ */
+let navigateRef = null
+
+/**
+ * setNavigate - Navigate fonksiyonunu global olarak ayarla
+ * App.jsx'te useEffect içinde çağrılmalı
+ *
+ * @param {Function} navigate - React Router navigate fonksiyonu
+ */
+export const setNavigate = (navigate) => {
+    navigateRef = navigate
+    console.log('✅ Navigate fonksiyonu axiosInstance\'a bağlandı')
+}
 
 // ==================== INLINE COOKIE OKUMA ====================
 
@@ -45,14 +64,12 @@ const readAuthCookie = () => {
             let cookie = cookies[i].trim()
 
             if (cookie.startsWith('authUser=')) {
-                // Sadece değer kısmını al
                 const encodedValue = cookie.substring(9) // 'authUser='.length = 9
 
                 if (!encodedValue) {
                     return null
                 }
 
-                // Değeri decode et ve parse et
                 const decodedValue = decodeURIComponent(encodedValue)
                 return JSON.parse(decodedValue)
             }
@@ -62,6 +79,45 @@ const readAuthCookie = () => {
     } catch (error) {
         console.error('❌ Cookie okuma hatası:', error.message)
         return null
+    }
+}
+
+/**
+ * clearAuthCookie - Cookie'yi temizle
+ */
+const clearAuthCookie = () => {
+    document.cookie = 'authUser=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+}
+
+// ==================== HANDLE UNAUTHORIZED ====================
+
+/**
+ * handleUnauthorized - 401 hatası için logout ve redirect işlemi
+ * Tüm auth bilgilerini temizler ve login sayfasına yönlendirir
+ */
+const handleUnauthorized = () => {
+    console.warn('🔒 401 Unauthorized - Oturum sonlandırılıyor...')
+
+    // 1. Cookie'yi temizle
+    clearAuthCookie()
+
+    // 2. localStorage'ı temizle
+    localStorage.removeItem(STORAGE_KEYS.TOKEN)
+    localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN)
+    localStorage.removeItem(STORAGE_KEYS.USER)
+
+    // 3. Kullanıcıya bilgi ver
+    message.warning('Oturum süreniz doldu. Lütfen tekrar giriş yapın.')
+
+    // 4. Login sayfasına yönlendir
+    if (navigateRef) {
+        // React Router ile yönlendir (tercih edilen yöntem)
+        console.log('🔄 React Router ile login\'e yönlendiriliyor...')
+        navigateRef('/login', { replace: true })
+    } else {
+        // Fallback: window.location kullan
+        console.log('🔄 window.location ile login\'e yönlendiriliyor...')
+        window.location.href = '/login'
     }
 }
 
@@ -175,57 +231,61 @@ axiosInstance.interceptors.response.use(
         })
 
         // 401 Unauthorized
-        if (error.response?.status === HTTP_STATUS.UNAUTHORIZED && !originalRequest._retry) {
-            originalRequest._retry = true
-            console.log('🔄 401 - Token refresh deneniyor...')
+        if (error.response?.status === HTTP_STATUS.UNAUTHORIZED) {
+            // Refresh token denemesi yapılmadıysa dene
+            if (!originalRequest._retry) {
+                originalRequest._retry = true
+                console.log('🔄 401 - Token refresh deneniyor...')
 
-            try {
-                const refreshToken = localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN)
+                try {
+                    const refreshToken = localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN)
 
-                if (refreshToken) {
-                    const formData = createFormData({ refreshToken })
-                    const response = await axios.post(
-                        `${API_CONFIG.BASE_URL}/auth/refresh`,
-                        formData,
-                        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-                    )
+                    if (refreshToken) {
+                        const formData = createFormData({ refreshToken })
+                        const response = await axios.post(
+                            `${API_CONFIG.BASE_URL}/auth/refresh`,
+                            formData,
+                            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+                        )
 
-                    if (response.data.isSuccess) {
-                        const { token } = response.data.result
-                        console.log('✅ Token yenilendi')
+                        if (response.data.isSuccess) {
+                            const { token } = response.data.result
+                            console.log('✅ Token yenilendi')
 
-                        localStorage.setItem(STORAGE_KEYS.TOKEN, token)
+                            localStorage.setItem(STORAGE_KEYS.TOKEN, token)
 
-                        // Cookie'yi güncelle
-                        const currentCookie = readAuthCookie() || {}
-                        const updatedCookie = {
-                            ...currentCookie,
-                            authToken: token,
-                            expirationDate: response.data.result.expirationDate
+                            // Cookie'yi güncelle
+                            const currentCookie = readAuthCookie() || {}
+                            const updatedCookie = {
+                                ...currentCookie,
+                                authToken: token,
+                                expirationDate: response.data.result.expirationDate
+                            }
+
+                            const jsonString = JSON.stringify(updatedCookie)
+                            const encodedData = encodeURIComponent(jsonString)
+                            const date = new Date()
+                            date.setTime(date.getTime() + (7 * 24 * 60 * 60 * 1000))
+                            document.cookie = `authUser=${encodedData}; expires=${date.toUTCString()}; path=/; SameSite=Lax`
+
+                            originalRequest.headers.Authorization = `Bearer ${token}`
+                            return axiosInstance(originalRequest)
                         }
-
-                        const jsonString = JSON.stringify(updatedCookie)
-                        const encodedData = encodeURIComponent(jsonString)
-                        const date = new Date()
-                        date.setTime(date.getTime() + (7 * 24 * 60 * 60 * 1000))
-                        document.cookie = `authUser=${encodedData}; expires=${date.toUTCString()}; path=/; SameSite=Lax`
-
-                        originalRequest.headers.Authorization = `Bearer ${token}`
-                        return axiosInstance(originalRequest)
                     }
+                } catch (refreshError) {
+                    console.error('❌ Token refresh başarısız:', refreshError)
                 }
-            } catch (refreshError) {
-                console.error('❌ Token refresh başarısız:', refreshError)
-
-                // Logout
-                localStorage.removeItem(STORAGE_KEYS.TOKEN)
-                localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN)
-                localStorage.removeItem(STORAGE_KEYS.USER)
-                document.cookie = 'authUser=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
-
-                window.location.href = '/login'
-                return Promise.reject(refreshError)
             }
+
+            // Refresh başarısız veya refresh token yok - logout yap
+            handleUnauthorized()
+            return Promise.reject(error)
+        }
+
+        // 403 Forbidden
+        if (error.response?.status === HTTP_STATUS.FORBIDDEN) {
+            message.error('Bu işlem için yetkiniz bulunmamaktadır.')
+            return Promise.reject(error)
         }
 
         // Error messages
@@ -265,6 +325,8 @@ export const debugToken = () => {
 
     const finalToken = getAuthToken()
     console.log('Final token:', finalToken ? '✓ VAR' : '✗ YOK')
+
+    console.log('Navigate ref:', navigateRef ? '✓ BAĞLI' : '✗ BAĞLI DEĞİL')
     console.log('═══════════════════════════════════════')
 }
 
